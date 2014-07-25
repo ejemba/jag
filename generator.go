@@ -18,8 +18,9 @@ type GeneratorHandle struct {
 // BT: basic type, GT: go type, T: any non template javatype
 /*
 var typeMap2 = map[string]string{
-
+	"java.lang.BT[]":"[]GT",
 	"java.util.Map<BT, T>":"map[GT]GT",
+	"java.util.List<T>":"[]T",
 	"java.util.Collection<T>":"[]GT",
 	"java.util.Iterator<java.util.Map$Entry<BT, T>>",
 
@@ -27,6 +28,30 @@ var typeMap2 = map[string]string{
 	"java.util.List<java.net.InetAddress>":"[]string",
 }
 */
+
+
+// Todo arrays... JNI pimitive arrays, and object arrays (should be done by GoJVM
+// 	"BASIC_T[]":"[]%s", Gojvm does []string -> String[] (not String[] > []string)
+var templateConversions = map[string]string {
+	"java.util.List<JAVA_T>":"[]%s",
+	"java.util.Collection<JAVA_T>":"[]%s",
+	"java.util.Map<BASIC_T, JAVA_T>":"map[%s]%s",
+	"java.util.Iterator<java.util.Map$Entry<BASIC_T, JAVA_T>>":"map[%s][]%s",
+}
+
+var indexTypes = []string {
+	"int",
+	"long",
+	"float",
+	"double",
+	"boolean",
+	"java.lang.String",
+}
+
+var basicConversions = map[string]string {
+	"java.lang.String":"string",
+	"java.net.InetAddress":"string",
+}
 
 var typeMap = map[string]string{
 	"void":"",
