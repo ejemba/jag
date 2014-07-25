@@ -30,29 +30,28 @@ var typeMap2 = map[string]string{
 */
 
 
-// Todo arrays... JNI pimitive arrays, and object arrays (should be done by GoJVM
-// 	"BASIC_T[]":"[]%s", Gojvm does []string -> String[] (not String[] > []string)
+// Todo arrays... JNI pimitive arrays, and object arrays (should be done by GoJVM)
+
+
+//containers of objects, supports object converstions (below)
+//want recursive containers
 var templateConversions = map[string]string {
-	"java.util.List<JAVA_T>":"[]%s",
-	"java.util.Collection<JAVA_T>":"[]%s",
-	"java.util.Map<BASIC_T, JAVA_T>":"map[%s]%s",
-	"java.util.Iterator<java.util.Map$Entry<BASIC_T, JAVA_T>>":"map[%s][]%s",
+	"java.util.List<%s>":"[]%s",
+	"java.util.Collection<%s>":"[]%s",
+	"java.util.Map<%s, %s>":"map[%s]%s",
+	"java.util.Map$Entry<%s, %s>":"struct{key %s; value %s}",
+	"java.util.Iterator<%s>":"[]%s",
+//	"java.util.Iterator<java.util.Map$Entry<BASIC_T, JAVA_T>>":"map[%s][]%s",
 }
 
-var indexTypes = []string {
-	"int",
-	"long",
-	"float",
-	"double",
-	"boolean",
-	"java.lang.String",
-}
-
-var basicConversions = map[string]string {
+var objectConversions = map[string]string {
 	"java.lang.String":"string",
+	"java.lang.Integer":"int",
 	"java.net.InetAddress":"string",
 }
 
+// textual map (conversion done by GoJVM)
+// variadic?
 var typeMap = map[string]string{
 	"void":"",
 	"int":"int",
@@ -60,15 +59,7 @@ var typeMap = map[string]string{
 	"float":"float32",
 	"double":"float64",
 	"boolean":"bool",
-	"java.lang.String":"string",
-	"java.lang.String...":"...string",
-	"java.lang.String[]":"[]string",
-	"java.util.List<java.lang.String>":"[]string",
-	"java.util.Map<java.lang.String, java.lang.String>":"map[string]string",
-	"java.util.Map<java.lang.String, java.lang.Integer>":"map[string]int",
-	"java.util.Collection<java.lang.String>":"[]string",
-	"java.util.Map<java.net.InetAddress, java.lang.Float>":"map[string]float32",
-	"java.util.List<java.net.InetAddress>":"[]string",
+//	"java.lang.String...":"...string",
 }
 
 type Translator struct {
