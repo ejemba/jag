@@ -7,20 +7,35 @@ import (
 	"log"
 	"strings"
 	"fmt"
+	"io"
 )
 
 func main() {
+	inputFilename := flag.String("in", "", "javap output file")
 	srcFilename := flag.String("src", "", "set the source file name")
 	packageName := flag.String("pkg", "gojvm_gen_package", "set the Go package name")
 	flag.Parse()
 
-	var file *os.File
-	var err error
-	if *srcFilename != "" {
-		file, err = os.Open(*srcFilename)
+	var javapReader io.Reader
+	if *inputFilename != "" {
+		file, err := os.Open(*inputFilename)
 		if err != nil {
 			log.Fatal(err)
 		}
+		defer file.Close()
+		javapReader = file
+	} else {
+		javapReader = os.Stdin
+	}
+
+	var srcReader io.Reader
+	if *srcFilename != "" {
+		file, err := os.Open(*srcFilename)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer file.Close()
+		srcReader = file
 	}
 
 	handle := &jag.ParserHandle{}
@@ -30,12 +45,12 @@ func main() {
 		&jag.Tokens{Parser: handle},
 		&jag.ClassSig{Parser: handle},
 		&jag.JavapParams{Parser: handle},
-		jag.NewCommentFilter("Signature:", "\n", `"`, `\`, jag.NewCommentFilter("Compiled from", "\n", `"`, `\`, os.Stdin)),
+		jag.NewCommentFilter("Signature:", "\n", `"`, `\`, jag.NewCommentFilter("Compiled from", "\n", `"`, `\`, javapReader)),
 	)
 
 	parser.Scan()
 
-	if file != nil {
+	if srcReader != nil {
 		handle := &jag.ParserHandle{}
 		srcParser := jag.NewParser(
 			handle,
@@ -43,7 +58,7 @@ func main() {
 			&jag.Tokens{Parser: handle},
 			&jag.ClassSig{Parser: handle},
 			&jag.SrcParams{Parser: handle},
-			jag.NewCommentFilter("//", "\n", `"`, `\`, jag.NewCommentFilter("/*", "*/", `"`, `\`, file)),
+			jag.NewCommentFilter("//", "\n", `"`, `\`, jag.NewCommentFilter("/*", "*/", `"`, `\`, srcReader)),
 		)
 		srcParser.Scan()
 
