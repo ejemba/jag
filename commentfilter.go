@@ -6,6 +6,12 @@ import (
 	"io"
 )
 
+const (
+	dataState = iota
+	commentState = iota
+	literalState = iota
+)
+
 type commentFilter struct {
 	start, end, strLit string
 	scanner *bufio.Scanner

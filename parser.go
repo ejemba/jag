@@ -87,12 +87,6 @@ func (s *Statements) GetStatement() string {
 	return <- s.stmts
 }
 
-const (
-	dataState = iota
-	commentState = iota
-	literalState = iota
-)
-
 func (s *Statements) Scan() {
 	go s.Parser.Parse()
 
