@@ -8,6 +8,7 @@ import (
 	"strings"
 	"fmt"
 	"io"
+	"github.com/timob/commentfilter"
 )
 
 func main() {
@@ -45,7 +46,7 @@ func main() {
 		&jag.Tokens{Parser: handle},
 		&jag.ClassSig{Parser: handle},
 		&jag.JavapParams{Parser: handle},
-		jag.NewCommentFilter("Signature:", "\n", `"`, `\`, jag.NewCommentFilter("Compiled from", "\n", `"`, `\`, javapReader)),
+		commentfilter.NewCommentFilter("Signature:", "\n", `"`, `\`, commentfilter.NewCommentFilter("Compiled from", "\n", `"`, `\`, javapReader)),
 	)
 
 	parser.Scan()
@@ -58,7 +59,7 @@ func main() {
 			&jag.Tokens{Parser: handle},
 			&jag.ClassSig{Parser: handle},
 			&jag.SrcParams{Parser: handle},
-			jag.NewCommentFilter("//", "\n", `"`, `\`, jag.NewCommentFilter("/*", "*/", `"`, `\`, srcReader)),
+			commentfilter.NewCommentFilter("//", "\n", `"`, `\`, commentfilter.NewCommentFilter("/*", "*/", `"`, `\`, srcReader)),
 		)
 		srcParser.Scan()
 
