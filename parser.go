@@ -40,6 +40,49 @@ type ParserHandle struct {
 		Parser
 }
 
+
+func JavaTypeComponents(j string) (p []string) {
+	if strings.HasSuffix(j, "...") {
+		return []string{"...", strings.TrimSuffix(string(j), "...")}
+	}
+
+	s := bufio.NewScanner(bytes.NewBufferString(strings.Replace(j, " ", "", -1)))
+	var scopeDepth int
+	s.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+		if i := bytes.IndexAny(data, "<>,"); i >= 0 {
+			if string(data[i]) == "<" {
+				scopeDepth++
+			}
+
+			var ret []byte
+			if scopeDepth < 2 {
+				ret = data[0:i]
+			} else {
+				ret = data[0:i+1]
+			}
+
+			if string(data[i]) == ">" {
+				scopeDepth--
+			}
+			return i + 1, ret, nil
+		} else if atEOF {
+			return len(data), data, nil
+		}
+		return 0, nil, nil
+	})
+
+	p = make([]string, 0)
+	var part string
+	for s.Scan() {
+		part += s.Text()
+		if scopeDepth < 2 && part != "" {
+			p = append(p, part)
+			part = ""
+		}
+	}
+	return
+}
+
 type Param struct {
 	Name string
 	Type string
@@ -261,7 +304,6 @@ func (c *ClassSig) Parse() {
 		}
 	}
 }
-
 
 func (c *ClassSig) Throws() bool {
 	var foundClose bool
