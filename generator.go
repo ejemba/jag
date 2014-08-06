@@ -139,6 +139,18 @@ func (s *StringGenerator) GenerateParamConversion(p Params) {
 	return
 }
 
+func (s *StringGenerator) GenerateCallArgs(p Params) (args []string) {
+	args = make([]string, len(p))
+	for i, param := range p {
+		if s.Gen.IsGoJVMType(param.Type) {
+			args[i] = param.Name
+		} else {
+			args[i] = "conv_" + param.Name + ".Value()"
+		}
+	}
+	return
+}
+
 func (s *StringGenerator) Generate() {
 	sig := s.Gen.GetClassSignature()
 	if sig.ClassName == "" {
@@ -173,7 +185,9 @@ func (s *StringGenerator) Generate() {
 		}
 		s.out += ") {\n"
 		s.GenerateParamConversion(constructor.Params)
-		newInstanceArgs := strings.Join(append(constructor.Params.Names(), `"` + sig.ClassName + `"`), ", ")
+		newInstanceArgs := make([]string, 0)
+		newInstanceArgs = append(newInstanceArgs, `"` + sig.ClassName + `"`)
+		newInstanceArgs = append(newInstanceArgs, s.GenerateCallArgs(constructor.Params)...)
 		var onError string
 		if constructor.Throws {
 			onError = "return nil, err"
@@ -181,7 +195,7 @@ func (s *StringGenerator) Generate() {
 			onError = "panic(err)"
 		}
 		s.out += `
-	obj, err := jag.Env.NewInstanceStr(` + newInstanceArgs + `)
+	obj, err := jag.Env.NewInstanceStr(` + strings.Join(newInstanceArgs, ", ") + `)
 	if err != nil {
 		` + onError + `
 	}
@@ -200,9 +214,9 @@ func (s *StringGenerator) Generate() {
 		ret := s.Gen.JavaToGoTypeName(method.Return)
 		if ret != "" {
 			if method.Throws {
-				s.out += "(" + ret  + ", error)"
+				s.out += "(ret " + ret  + ", err error)"
 			} else {
-				s.out += ret
+				s.out += "(ret " + ret + ")"
 			}
 		} else {
 			if method.Throws {
@@ -211,7 +225,29 @@ func (s *StringGenerator) Generate() {
 		}
 		s.out += " {\n"
 		s.GenerateParamConversion(method.Params)
-		s.out += "}\n\n"
+		s.out += "\t"
+		if ret != "" {
+			s.out += "jret := "
+		}
+		s.out += "x.Call"
+		if s.Gen.IsGoJVMType(method.Return) {
+			s.out += method.Return
+		} else {
+			s.out += "Obj"
+		}
+		callArgs := make([]string, 0)
+		callArgs = append(callArgs, `"` + method.Name + `"`)
+		callArgs = append(callArgs, s.GenerateCallArgs(method.Params)...)
+		s.out += "(" + strings.Join(callArgs, ", ") + ")\n"
+		if ret != "" {
+			if s.Gen.IsGoJVMType(method.Return) {
+				s.out += "\tret = jret\n"
+			} else {
+				s.out += "\tretconv := " + s.Gen.ConverterForType("jag.NewJavaToGo", method.Return) + "\n"
+				s.out += "\tretconv.Dest(&ret)\n\tif err := retconv.Convert(jret); err != nil {\n\t\tpanic(err)\n\t}\n"
+			}
+		}
+		s.out += "\treturn\n}\n\n"
 	}
 }
 
