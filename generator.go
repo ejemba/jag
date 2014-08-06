@@ -227,8 +227,9 @@ func (s *StringGenerator) Generate() {
 		s.GenerateParamConversion(method.Params)
 		s.out += "\t"
 		if ret != "" {
-			s.out += "jret := "
+			s.out += "jret, "
 		}
+		s.out += "err := "
 		s.out += "x.Call"
 		if s.Gen.IsGoJVMType(method.Return) {
 			s.out += method.Return
@@ -239,6 +240,13 @@ func (s *StringGenerator) Generate() {
 		callArgs = append(callArgs, `"` + method.Name + `"`)
 		callArgs = append(callArgs, s.GenerateCallArgs(method.Params)...)
 		s.out += "(" + strings.Join(callArgs, ", ") + ")\n"
+		s.out += "\tif err != nil {\n\t\t"
+		if method.Throws {
+			s.out += "return\n"
+		} else {
+			s.out += "panic(err)\n"
+		}
+		s.out += "\t}\n"
 		if ret != "" {
 			if s.Gen.IsGoJVMType(method.Return) {
 				s.out += "\tret = jret\n"

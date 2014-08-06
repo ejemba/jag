@@ -37,7 +37,7 @@ type Callable struct {
 	env *gojvm.Environment
 }
 
-func (c *Callable) callObj(method string, retType interface{}, args ...interface{}) *gojvm.Object {
+func (c *Callable) CallObj(method string, retType interface{}, args ...interface{}) (*gojvm.Object, error) {
 	var t types.Typed
 	switch v := retType.(type) {
 	case string:
@@ -47,70 +47,42 @@ func (c *Callable) callObj(method string, retType interface{}, args ...interface
 	default:
 		panic("Callable.callObj unknown retType type")
 	}
-	obj, err := c.obj.CallObj(c.env, false, method, t, args...)
-	if err != nil {
-		log.Panic(err)
-	}
-	return obj
+	return c.obj.CallObj(c.env, false, method, t, args...)
 }
 
+/*
 func (c *Callable) callCallable(method string, retType interface{}, args ...interface{}) *Callable {
 	return &Callable{c.callObj(method, retType, args...), c.env}
 }
+*/
 
-func (c *Callable) callStr(method string, args ...interface{}) string {
+func (c *Callable) CallStr(method string, args ...interface{}) (string, error) {
 	str, _, err := c.obj.CallString(c.env, false, method, args...)
-	if err != nil {
-		log.Panic(err)
-	}
-	return str
+	return str, err
 }
 
-func (c *Callable) callInt(method string, args ...interface{}) int {
-	n, err := c.obj.CallInt(c.env, false, method, args...)
-	if err != nil {
-		log.Panic(err)
-	}
-	return n
+func (c *Callable) CallInt(method string, args ...interface{}) (int, error) {
+	return c.obj.CallInt(c.env, false, method, args...)
 }
 
-func (c *Callable) callLong(method string, args ...interface{}) int64 {
-	n, err := c.obj.CallLong(c.env, false, method, args...)
-	if err != nil {
-		log.Panic(err)
-	}
-	return n
+func (c *Callable) CallLong(method string, args ...interface{}) (int64, error) {
+	return c.obj.CallLong(c.env, false, method, args...)
 }
 
-func (c *Callable) callBool(method string, args ...interface{}) bool {
-	b, err := c.obj.CallBool(c.env, false, method, args...)
-	if err != nil {
-		log.Panic(err)
-	}
-	return b
+func (c *Callable) CallBool(method string, args ...interface{}) (bool, error) {
+	return c.obj.CallBool(c.env, false, method, args...)
 }
 
-func (c *Callable) callVoid(method string, args ...interface{}) {
-	err := c.obj.CallVoid(c.env, false, method, args...)
-	if err != nil {
-		log.Panic(err)
-	}
+func (c *Callable) CallVoid(method string, args ...interface{}) (error) {
+	return c.obj.CallVoid(c.env, false, method, args...)
 }
 
-func (c *Callable) callFloat(method string, args ...interface{}) float32 {
-	n, err := c.obj.CallFloat(c.env, false, method, args...)
-	if err != nil {
-		log.Panic(err)
-	}
-	return n
+func (c *Callable) CallFloat(method string, args ...interface{}) (float32, error) {
+	return c.obj.CallFloat(c.env, false, method, args...)
 }
 
-func (c *Callable) callDouble(method string, args ...interface{}) float64 {
-	n, err := c.obj.CallDouble(c.env, false, method, args...)
-	if err != nil {
-		log.Panic(err)
-	}
-	return n
+func (c *Callable) CallDouble(method string, args ...interface{}) (float64, error) {
+	return c.obj.CallDouble(c.env, false, method, args...)
 }
 
 type callableContainer interface {
