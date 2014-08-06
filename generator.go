@@ -9,6 +9,8 @@ import (
 type Generator interface {
 	GetClassSignature() *ClassSig
 	JavaToGoTypeName(string) string
+	ConverterForType(prefix, s string) (z string)
+	IsGoJVMType(s string) bool
 	Generate()
 }
 
@@ -38,7 +40,6 @@ var typeMap = map[string]string{
 	"float":"float32",
 	"double":"float64",
 	"boolean":"bool",
-//	"java.lang.String...":"...string",
 }
 
 type Translator struct {
@@ -73,6 +74,33 @@ func (t *Translator) JavaToGoTypeName(s string) (z string) {
 	}
 }
 
+func (t *Translator) IsGoJVMType(s string) bool {
+	_, ok := t.TypeMap[s]
+	return ok
+}
+
+// NewGoToJavaList(NewGoToJavaString())
+// NewGoToJavaList(NewGoToJavaList(NewGoToJavaString())
+func (t *Translator) ConverterForType(prefix, s string) (z string) {
+	jc := JavaTypeComponents(s)
+	var name string
+	if _, ok := t.ObjectConversions[jc[0]]; ok {
+		name = className(jc[0])
+	} else {
+		name = "Callable"
+	}
+	z += prefix + name + "("
+
+	for i := 1; i < len(jc); i++ {
+		if i != 1 {
+			z += ", "
+		}
+		z += t.ConverterForType(prefix, jc[i])
+	}
+	z += ")"
+	return
+}
+
 func javaNameToGoName(s string) (z string) {
 	for _, part := range strings.Split(s, ".") {
 		z += capitalize(part)
@@ -93,6 +121,22 @@ func (s *StringGenerator) printParams(params Params) {
 		}
 		s.out += p.Name + " " + s.Gen.JavaToGoTypeName(p.Type)
 	}
+}
+
+func (s *StringGenerator) GenerateParamConversion(p Params) {
+	conversions := make([]string, 0)
+	for _, param := range p {
+		if s.Gen.IsGoJVMType(param.Type) {
+			continue
+		}
+		s.out += "\tconv_" + param.Name + " := " + s.Gen.ConverterForType("jag.NewGoToJava", param.Type) + "\n"
+		conversions = append(conversions, param.Name)
+	}
+
+	for _, param := range conversions {
+		s.out += "\tif err := conv_" + param + ".Convert(" + param + "); err != nil {\n\t\tpanic(err)\n\t}\n"
+	}
+	return
 }
 
 func (s *StringGenerator) Generate() {
@@ -127,7 +171,8 @@ func (s *StringGenerator) Generate() {
 		if constructor.Throws {
 			s.out += ", error"
 		}
-		s.out += ")"
+		s.out += ") {\n"
+		s.GenerateParamConversion(constructor.Params)
 		newInstanceArgs := strings.Join(append(constructor.Params.Names(), `"` + sig.ClassName + `"`), ", ")
 		var onError string
 		if constructor.Throws {
@@ -135,7 +180,7 @@ func (s *StringGenerator) Generate() {
 		} else {
 			onError = "panic(err)"
 		}
-		s.out += ` {
+		s.out += `
 	obj, err := jag.Env.NewInstanceStr(` + newInstanceArgs + `)
 	if err != nil {
 		` + onError + `
@@ -164,7 +209,9 @@ func (s *StringGenerator) Generate() {
 				s.out += "error"
 			}
 		}
-		s.out += " {\n}\n\n"
+		s.out += " {\n"
+		s.GenerateParamConversion(method.Params)
+		s.out += "}\n\n"
 	}
 }
 

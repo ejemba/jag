@@ -106,11 +106,16 @@ func (params Params) Types() (types []string) {
 	return
 }
 
+var classNameRe = regexp.MustCompile(`[A-z,a-z]+\.`)
+
+func className(name string) string {
+	return classNameRe.ReplaceAllString(name, "")
+}
+
 func (params Params) TypeClassNames() (names []string) {
 	names = make([]string, len(params))
-	re := regexp.MustCompile(`[A-z,a-z]+\.`)
 	for i, p := range params {
-		names[i] = re.ReplaceAllString(p.Type, "")
+		names[i] = className(p.Type)
 	}
 	return
 }
