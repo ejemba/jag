@@ -68,12 +68,16 @@ func (t *Translator) JavaToGoTypeName(s string) (z string) {
 	} else if v, ok := t.ObjectConversions[prefix]; ok {
 		return fmt.Sprintf(v, gc...)
 	} else {
-		z = "*"
-		for _, part := range strings.Split(s, ".") {
-			z += capitalize(part)
-		}
+		z = "*" + javaNameToGoName(s)
 		return
 	}
+}
+
+func javaNameToGoName(s string) (z string) {
+	for _, part := range strings.Split(s, ".") {
+		z += capitalize(part)
+	}
+	return
 }
 
 type StringGenerator struct {
@@ -107,7 +111,7 @@ func (s *StringGenerator) Generate() {
 	}
 	*/
 
-	goClassTypeName := s.Gen.JavaToGoTypeName(sig.ClassName)
+	goClassTypeName := javaNameToGoName(sig.ClassName)
 	s.out += fmt.Sprintf("type %s struct {\n\t*jag.Callable\n}\n\n", goClassTypeName)
 
 	for i, constructor := range sig.Constructors {
@@ -124,12 +128,19 @@ func (s *StringGenerator) Generate() {
 			s.out += ", error"
 		}
 		s.out += ")"
+		newInstanceArgs := strings.Join(append(constructor.Params.Names(), `"` + sig.ClassName + `"`), ", ")
+		var onError string
+		if constructor.Throws {
+			onError = "return nil, err"
+		} else {
+			onError = "panic(err)"
+		}
 		s.out += ` {
-	obj, err := jag.Env.NewInstanceStr("` + sig.ClassName + `", ` + strings.Join(constructor.Params.Names(), ", ") + `)
+	obj, err := jag.Env.NewInstanceStr(` + newInstanceArgs + `)
 	if err != nil {
-		return nil, err
+		` + onError + `
 	}
-	return &` + goClassTypeName + `{&goJVMCallable{obj, jag.Env}}, nil
+	return &` + goClassTypeName + `{&jag.Callable{obj, jag.Env}}, nil
 }
 
 `
@@ -137,7 +148,7 @@ func (s *StringGenerator) Generate() {
 
 	for _, method := range sig.Methods {
 		s.out += "// " + method.Line + "\n"
-		s.out += fmt.Sprintf("func (x %s) %s", goClassTypeName, capitalize(method.Name))
+		s.out += fmt.Sprintf("func (x *%s) %s", goClassTypeName, capitalize(method.Name))
 		s.out += "("
 		s.printParams(method.Params)
 		s.out += ") "
