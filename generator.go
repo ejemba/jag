@@ -3,6 +3,7 @@ package jag
 import (
 	"fmt"
 	"strings"
+	"log"
 )
 
 type Generator interface {
@@ -15,43 +16,21 @@ type GeneratorHandle struct {
 	Generator
 }
 
-// BT: basic type, GT: go type, T: any non template javatype
-/*
-var typeMap2 = map[string]string{
-	"java.lang.BT[]":"[]GT",
-	"java.util.Map<BT, T>":"map[GT]GT",
-	"java.util.List<T>":"[]T",
-	"java.util.Collection<T>":"[]GT",
-	"java.util.Iterator<java.util.Map$Entry<BT, T>>",
 
-	"java.util.Map<java.net.InetAddress, java.lang.Float>":"map[string]float32",
-	"java.util.List<java.net.InetAddress>":"[]string",
-}
-*/
-
-
-// Todo arrays... JNI pimitive arrays, and object arrays (should be done by GoJVM)
-
-
-//containers of objects, supports object converstions (below)
-//want recursive containers
-var templateConversions = map[string]string {
-	"java.util.List<%s>":"[]%s",
-	"java.util.Collection<%s>":"[]%s",
-	"java.util.Map<%s, %s>":"map[%s]%s",
-	"java.util.Map$Entry<%s, %s>":"struct{key %s; value %s}",
-	"java.util.Iterator<%s>":"[]%s",
-//	"java.util.Iterator<java.util.Map$Entry<BASIC_T, JAVA_T>>":"map[%s][]%s",
-}
+// JNI pimitive arrays, and object arrays (should be done by GoJVM)
 
 var objectConversions = map[string]string {
 	"java.lang.String":"string",
-	"java.lang.Integer":"int",
-	"java.net.InetAddress":"string",
+	"...":"...%s",
+	"java.util.List":"[]%s",
+	"java.util.Collection":"[]%s",
+	"java.util.Map":"map[%s]%s",
+	"java.util.Map$Entry":"struct{key %s; value %s}",
+	"java.util.Iterator":"struct{func Next() bool, func Value() %s}",
 }
 
 // textual map (conversion done by GoJVM)
-// variadic?
+// variadic are arrays like Go so just prefix ... to type
 var typeMap = map[string]string{
 	"void":"",
 	"int":"int",
@@ -64,23 +43,43 @@ var typeMap = map[string]string{
 
 type Translator struct {
 	TypeMap map[string]string
+	ObjectConversions map[string]string
 }
 
 func NewTranslator() *Translator {
-	return &Translator{typeMap}
+	return &Translator{typeMap, objectConversions}
 }
 
-func (t *Translator) JavaToGoTypeName(s string) string {
-	if v, ok := t.TypeMap[s]; ok {
+func (t *Translator) JavaToGoTypeName(s string) (z string) {
+	if debug {
+		log.Printf("translating " + s)
+		defer func() {log.Printf("translated to: " + z) }()
+	}
+
+	jc := JavaTypeComponents(s)
+	gc := make([]interface{}, 0)
+	for i := 1; i < len(jc); i++ {
+		gc = append(gc, t.JavaToGoTypeName(jc[i]))
+	}
+
+	prefix := jc[0]
+	if v, ok := t.TypeMap[prefix]; ok {
 		return v
+	} else if v, ok := t.ObjectConversions[prefix]; ok {
+		return fmt.Sprintf(v, gc...)
 	} else {
-		return fmt.Sprintf("UNKNOWN %s", s)
+		z = "*"
+		for _, part := range strings.Split(s, ".") {
+			z += capitalize(part)
+		}
+		return
 	}
 }
 
 type StringGenerator struct {
 	out string
 	Gen Generator
+	PkgName string
 }
 
 func (s *StringGenerator) printParams(params Params) {
@@ -98,11 +97,18 @@ func (s *StringGenerator) Generate() {
 		return
 	}
 
+	s.out += "package " + s.PkgName + "\n\n"
+	s.out += "import \"jag\"\n\n"
+
+	/*
 	goClassTypeName := ""
 	for _, part := range strings.Split(sig.ClassName, ".") {
 		goClassTypeName += capitalize(part)
 	}
-	s.out += fmt.Sprintf("type %s struct {\n\t*gojvmcallable\n}\n\n", goClassTypeName)
+	*/
+
+	goClassTypeName := s.Gen.JavaToGoTypeName(sig.ClassName)
+	s.out += fmt.Sprintf("type %s struct {\n\t*jag.Callable\n}\n\n", goClassTypeName)
 
 	for i, constructor := range sig.Constructors {
 		s.out += "// " + constructor.Line + "\n"
@@ -119,11 +125,11 @@ func (s *StringGenerator) Generate() {
 		}
 		s.out += ")"
 		s.out += ` {
-	obj, err := env.NewInstanceStr("` + sig.ClassName + `", ` + strings.Join(constructor.Params.Names(), ", ") + `)
+	obj, err := jag.Env.NewInstanceStr("` + sig.ClassName + `", ` + strings.Join(constructor.Params.Names(), ", ") + `)
 	if err != nil {
-		    return nil, err
+		return nil, err
 	}
-	return &` + goClassTypeName + `{&goJVMCallable{obj, env}}, nil
+	return &` + goClassTypeName + `{&goJVMCallable{obj, jag.Env}}, nil
 }
 
 `
@@ -131,7 +137,7 @@ func (s *StringGenerator) Generate() {
 
 	for _, method := range sig.Methods {
 		s.out += "// " + method.Line + "\n"
-		s.out += fmt.Sprintf("func (x *%s) %s", goClassTypeName, capitalize(method.Name))
+		s.out += fmt.Sprintf("func (x %s) %s", goClassTypeName, capitalize(method.Name))
 		s.out += "("
 		s.printParams(method.Params)
 		s.out += ") "

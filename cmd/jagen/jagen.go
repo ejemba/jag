@@ -100,14 +100,11 @@ func main() {
 		} {
 		jag.NewTranslator(),
 		parser.GetClassSignature(),
-		&jag.StringGenerator{Gen: genHandle},
+		&jag.StringGenerator{Gen: genHandle, PkgName: *packageName},
 	}
 	genHandle.Generator = gen
 
 	gen.Generate()
 
-	if gen.Output() != "" {
-		fmt.Println("package " + *packageName + "\n")
-		fmt.Print(gen.Output())
-	}
+	fmt.Print(gen.Output())
 }

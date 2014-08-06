@@ -145,6 +145,10 @@ type GoToJavaCallable struct {
 	obj	*gojvm.Object
 }
 
+func NewGoToJavaCallable() *GoToJavaCallable {
+	return &GoToJavaCallable{}
+}
+
 func (g *GoToJavaCallable) Convert(value interface{}) (err error) {
 	g.obj = value.(callableContainer).getCallable().obj
 	return
@@ -160,6 +164,10 @@ func (g *GoToJavaCallable) CleanUp() error {
 
 type JavaToGoCallable struct {
 	callable *Callable
+}
+
+func NewJavaToGoCallable() *JavaToGoCallable {
+	return &JavaToGoCallable{}
 }
 
 func (j *JavaToGoCallable) Dest(ptr interface{}) {
