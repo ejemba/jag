@@ -120,32 +120,40 @@ func (params Params) TypeClassNames() (names []string) {
 	return
 }
 
+type stmtMsg struct {
+	statement string
+	depth int
+}
+
 type Statements struct {
-	stmts chan string	
+	stmts chan *stmtMsg
 	scopeDepth int
 	Parser Parser
 }
 
 func NewStatements(g Parser) (a *Statements) {
-	a = &Statements{make(chan string, 0), 0, g}
+	a = &Statements{make(chan *stmtMsg, 0), 0, g}
 	return
 }
 
 func (s *Statements) GetStatement() string {
-	return <- s.stmts
+	x := <- s.stmts
+	s.scopeDepth = x.depth
+	return x.statement
 }
 
 func (s *Statements) Scan() {
 	go s.Parser.Parse()
 
 	scanner := bufio.NewScanner(s.Parser)
-	
+
+	depth := 0
 	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		if i := bytes.IndexAny(data, ";{}"); i >= 0 {
 			if string(data[i]) == "{" {
-				s.scopeDepth++
+				depth++
 			} else if string(data[i]) == "}" {
-				s.scopeDepth--
+				depth--
 			}
 			return i + 1, data[0:i], nil
 		} else if atEOF {
@@ -156,7 +164,7 @@ func (s *Statements) Scan() {
 	
 	for scanner.Scan() {
 		stmt := string(bytes.Join(bytes.Fields(scanner.Bytes()), []byte{' '}))
-		s.stmts <- stmt
+		s.stmts <- &stmtMsg{stmt, depth}
 	}
 }
 
@@ -220,7 +228,7 @@ func (t *Tokens) ParseStatement() {
 	}		
 
 	if debug {
-		log.Printf("%v", tokens)
+		log.Printf("%v depth=%d", tokens, t.Parser.ScopeDepth())
 	}
 
 	t.tokens = tokens
