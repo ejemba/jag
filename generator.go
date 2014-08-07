@@ -129,7 +129,7 @@ func (s *StringGenerator) GenerateParamConversion(p Params) {
 		if s.Gen.IsGoJVMType(param.Type) {
 			continue
 		}
-		s.out += "\tconv_" + param.Name + " := " + s.Gen.ConverterForType("jag.NewGoToJava", param.Type) + "\n"
+		s.out += "\tconv_" + param.Name + " := " + s.Gen.ConverterForType("javabind.NewGoToJava", param.Type) + "\n"
 		conversions = append(conversions, param.Name)
 	}
 
@@ -158,7 +158,7 @@ func (s *StringGenerator) Generate() {
 	}
 
 	s.out += "package " + s.PkgName + "\n\n"
-	s.out += "import \"jag\"\n\n"
+	s.out += "import \"javabind\"\n\n"
 
 	/*
 	goClassTypeName := ""
@@ -168,11 +168,11 @@ func (s *StringGenerator) Generate() {
 	*/
 
 	goClassTypeName := javaNameToGoName(sig.ClassName)
-	s.out += fmt.Sprintf("type %s struct {\n\t*jag.Callable\n}\n\n", goClassTypeName)
+	s.out += fmt.Sprintf("type %s struct {\n\t*javabind.Callable\n}\n\n", goClassTypeName)
 
 	for i, constructor := range sig.Constructors {
-		s.out += "// " + constructor.Line + "\n"
-		s.out += "func New" + goClassTypeName
+		s.out += "// "+constructor.Line+"\n"
+		s.out += "func New"+goClassTypeName
 		if i > 0 {
 			s.out += fmt.Sprintf("%d", i+1)
 		}
@@ -186,7 +186,7 @@ func (s *StringGenerator) Generate() {
 		s.out += ") {\n"
 		s.GenerateParamConversion(constructor.Params)
 		newInstanceArgs := make([]string, 0)
-		newInstanceArgs = append(newInstanceArgs, `"` + sig.ClassName + `"`)
+		newInstanceArgs = append(newInstanceArgs, `"`+sig.ClassName+`"`)
 		newInstanceArgs = append(newInstanceArgs, s.GenerateCallArgs(constructor.Params)...)
 		var onError string
 		if constructor.Throws {
@@ -195,19 +195,21 @@ func (s *StringGenerator) Generate() {
 			onError = "panic(err)"
 		}
 		s.out += `
-	obj, err := jag.Env.NewInstanceStr(` + strings.Join(newInstanceArgs, ", ") + `)
+	obj, err := javabind.Env.NewInstanceStr(`+strings.Join(newInstanceArgs, ", ")+`)
 	if err != nil {
-		` + onError + `
+		`+onError+`
 	}
-	return &` + goClassTypeName + `{&jag.Callable{obj, jag.Env}}, nil
-}
+	return &`+goClassTypeName+`{&javabind.Callable{obj, javabind.Env}}`
 
-`
+		if constructor.Throws {
+			s.out += ", nil"
+		}
+		s.out += "\n}\n\n"
 	}
 
 	for _, method := range sig.Methods {
 		s.out += "// " + method.Line + "\n"
-		s.out += fmt.Sprintf("func (x *%s) %s", goClassTypeName, capitalize(method.Name))
+		s.out += fmt.Sprintf("func (jbobject *%s) %s", goClassTypeName, capitalize(method.Name))
 		s.out += "("
 		s.printParams(method.Params)
 		s.out += ") "
@@ -230,7 +232,7 @@ func (s *StringGenerator) Generate() {
 			s.out += "jret, "
 		}
 		s.out += "err := "
-		s.out += "x.Call"
+		s.out += "jbobject.Call"
 		if s.Gen.IsGoJVMType(method.Return) {
 			s.out += method.Return
 		} else {
@@ -238,6 +240,9 @@ func (s *StringGenerator) Generate() {
 		}
 		callArgs := make([]string, 0)
 		callArgs = append(callArgs, `"` + method.Name + `"`)
+		if !s.Gen.IsGoJVMType(method.Return) {
+			callArgs = append(callArgs, `"` + method.Return  + `"`)
+		}
 		callArgs = append(callArgs, s.GenerateCallArgs(method.Params)...)
 		s.out += "(" + strings.Join(callArgs, ", ") + ")\n"
 		s.out += "\tif err != nil {\n\t\t"
@@ -251,7 +256,7 @@ func (s *StringGenerator) Generate() {
 			if s.Gen.IsGoJVMType(method.Return) {
 				s.out += "\tret = jret\n"
 			} else {
-				s.out += "\tretconv := " + s.Gen.ConverterForType("jag.NewJavaToGo", method.Return) + "\n"
+				s.out += "\tretconv := " + s.Gen.ConverterForType("javabind.NewJavaToGo", method.Return) + "\n"
 				s.out += "\tretconv.Dest(&ret)\n\tif err := retconv.Convert(jret); err != nil {\n\t\tpanic(err)\n\t}\n"
 			}
 		}
