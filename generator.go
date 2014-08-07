@@ -145,7 +145,7 @@ func (s *StringGenerator) GenerateCallArgs(p Params) (args []string) {
 		if s.Gen.IsGoJVMType(param.Type) {
 			args[i] = param.Name
 		} else {
-			args[i] = "conv_" + param.Name + ".Value()"
+			args[i] = "javabind.CastObject(conv_" + param.Name + ".Value(), \"" + JavaTypeComponents(param.Type)[0] + "\")"
 		}
 	}
 	return
@@ -241,7 +241,7 @@ func (s *StringGenerator) Generate() {
 		callArgs := make([]string, 0)
 		callArgs = append(callArgs, `"` + method.Name + `"`)
 		if !s.Gen.IsGoJVMType(method.Return) {
-			callArgs = append(callArgs, `"` + method.Return  + `"`)
+			callArgs = append(callArgs, `"` + JavaTypeComponents(method.Return)[0]  + `"`)
 		}
 		callArgs = append(callArgs, s.GenerateCallArgs(method.Params)...)
 		s.out += "(" + strings.Join(callArgs, ", ") + ")\n"
