@@ -11,6 +11,7 @@ type Generator interface {
 	JavaToGoTypeName(string) string
 	ConverterForType(prefix, s string) (z string)
 	IsGoJVMType(s string) bool
+	IsCallableType(s string) bool
 	Generate()
 }
 
@@ -79,15 +80,20 @@ func (t *Translator) IsGoJVMType(s string) bool {
 	return ok
 }
 
+func (t *Translator) IsCallableType(s string) bool {
+	_, ok := t.ObjectConversions[s]
+	return !ok
+}
+
 // NewGoToJavaList(NewGoToJavaString())
 // NewGoToJavaList(NewGoToJavaList(NewGoToJavaString())
 func (t *Translator) ConverterForType(prefix, s string) (z string) {
 	jc := JavaTypeComponents(s)
 	var name string
-	if _, ok := t.ObjectConversions[jc[0]]; ok {
-		name = className(jc[0])
-	} else {
+	if t.IsCallableType(jc[0]) {
 		name = "Callable"
+	} else {
+		name = className(jc[0])
 	}
 	z += prefix + name + "("
 
@@ -257,7 +263,16 @@ func (s *StringGenerator) Generate() {
 				s.out += "\tret = jret\n"
 			} else {
 				s.out += "\tretconv := " + s.Gen.ConverterForType("javabind.NewJavaToGo", method.Return) + "\n"
-				s.out += "\tretconv.Dest(&ret)\n\tif err := retconv.Convert(jret); err != nil {\n\t\tpanic(err)\n\t}\n"
+				firstRetComponent := JavaTypeComponents(method.Return)[0]
+				if s.Gen.IsCallableType(firstRetComponent) {
+					s.out += "\tdst := &javabind.Callable{}\n"
+				} else {
+					s.out += "\tdst := &ret\n"
+				}
+				s.out += "\tretconv.Dest(dst)\n\tif err := retconv.Convert(jret); err != nil {\n\t\tpanic(err)\n\t}\n"
+				if s.Gen.IsCallableType(firstRetComponent) {
+					s.out += "\tret = &" + javaNameToGoName(method.Return) + "{dst}\n"
+				}
 			}
 		}
 		s.out += "\treturn\n}\n\n"
