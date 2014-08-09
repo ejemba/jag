@@ -89,13 +89,17 @@ func (t *Translator) IsCallableType(s string) bool {
 // NewGoToJavaList(NewGoToJavaList(NewGoToJavaString())
 func (t *Translator) ConverterForType(prefix, s string) (z string) {
 	jc := JavaTypeComponents(s)
-	var name string
-	if t.IsCallableType(jc[0]) {
-		name = "Callable"
+	if jc[0] == "..." {
+		z += "javabind.NewGoToGoObjectArray("
 	} else {
-		name = className(jc[0])
+		var name string
+		if t.IsCallableType(jc[0]) {
+			name = "Callable"
+		} else {
+			name = className(jc[0])
+		}
+		z += prefix + name + "("
 	}
-	z += prefix + name + "("
 
 	for i := 1; i < len(jc); i++ {
 		if i != 1 {
@@ -148,9 +152,12 @@ func (s *StringGenerator) GenerateParamConversion(p Params) {
 func (s *StringGenerator) GenerateCallArgs(p Params) (args []string) {
 	args = make([]string, len(p))
 	for i, param := range p {
-		if s.Gen.IsGoJVMType(param.Type) {
+ 		if s.Gen.IsGoJVMType(param.Type) {
 			args[i] = param.Name
-		} else {
+		} else if strings.HasSuffix(param.Type, "...") {
+			name := strings.TrimSuffix(param.Type, "...")
+			args[i] = "javabind.ObjectArray(conv_" + param.Name + ".Value(), \"" + JavaTypeComponents(name)[0] + "\")"
+ 		} else {
 			args[i] = "javabind.CastObject(conv_" + param.Name + ".Value(), \"" + JavaTypeComponents(param.Type)[0] + "\")"
 		}
 	}
@@ -240,7 +247,7 @@ func (s *StringGenerator) Generate() {
 		s.out += "err := "
 		s.out += "jbobject.Call"
 		if s.Gen.IsGoJVMType(method.Return) {
-			s.out += method.Return
+			s.out += capitalize(method.Return)
 		} else {
 			s.out += "Obj"
 		}

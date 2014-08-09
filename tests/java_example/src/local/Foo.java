@@ -23,4 +23,12 @@ public class Foo {
     public local.Bar Method2(local.Bar x) {
         return x;
     }
+
+    public String Method3(String... words) {
+        String ret = new String();
+        for (int i = 0; i < words.length; i++) {
+            ret += words[i] + " ";
+        }
+        return ret;
+    }
 }
