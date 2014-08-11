@@ -15,6 +15,7 @@ func main() {
 	inputFilename := flag.String("in", "", "javap output file")
 	srcFilename := flag.String("src", "", "set the source file name")
 	packageName := flag.String("pkg", "gojvm_gen_package", "set the Go package name")
+	outputTypeDependency := flag.Bool("d", false, "display type dependency")
 	flag.Parse()
 
 	var javapReader io.Reader
@@ -93,12 +94,21 @@ func main() {
 
 	genHandle := &jag.GeneratorHandle{}
 
+	var t jag.TranslatorInterface
+	var list *jag.CallableList
+
+	if *outputTypeDependency {
+		list = &jag.CallableList{Translator: jag.NewTranslator()}
+		t = list
+	} else {
+		t = jag.NewTranslator()
+	}
 	gen := &struct {
-		*jag.Translator
+		jag.TranslatorInterface
 		*jag.ClassSig
 		*jag.StringGenerator
 		} {
-		jag.NewTranslator(),
+		t,
 		parser.GetClassSignature(),
 		&jag.StringGenerator{Gen: genHandle, PkgName: *packageName},
 	}
@@ -106,5 +116,11 @@ func main() {
 
 	gen.Generate()
 
-	fmt.Print(gen.Output())
+	if *outputTypeDependency {
+		for _, line := range list.ListCallables() {
+			fmt.Println(line)
+		}
+	} else {
+		fmt.Print(gen.Output())
+	}
 }

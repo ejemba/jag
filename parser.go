@@ -44,6 +44,8 @@ type ParserHandle struct {
 func JavaTypeComponents(j string) (p []string) {
 	if strings.HasSuffix(j, "...") {
 		return []string{"...", strings.TrimSuffix(string(j), "...")}
+	} else if strings.HasSuffix(j, "[]") {
+		return []string{"[]", strings.TrimSuffix(string(j), "[]")}
 	}
 
 	s := bufio.NewScanner(bytes.NewBufferString(strings.Replace(j, " ", "", -1)))

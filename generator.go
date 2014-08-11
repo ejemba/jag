@@ -8,11 +8,15 @@ import (
 
 type Generator interface {
 	GetClassSignature() *ClassSig
+	Generate()
+	TranslatorInterface
+}
+
+type TranslatorInterface interface {
 	JavaToGoTypeName(string) string
 	ConverterForType(prefix, s string) (z string)
 	IsGoJVMType(s string) bool
 	IsCallableType(s string) bool
-	Generate()
 }
 
 type GeneratorHandle struct {
@@ -21,19 +25,22 @@ type GeneratorHandle struct {
 
 
 // JNI pimitive arrays, and object arrays (should be done by GoJVM)
-
+// variadic are arrays like Go so just prefix ... to type
 var objectConversions = map[string]string {
+	"java.lang.Long":"int64",
+	"java.lang.Integer":"int",
 	"java.lang.String":"string",
 	"...":"...%s",
+	"[]":"[]%s",
 	"java.util.List":"[]%s",
 	"java.util.Collection":"[]%s",
+	"java.util.Set":"[]%s",
 	"java.util.Map":"map[%s]%s",
 	"java.util.Map$Entry":"struct{key %s; value %s}",
 	"java.util.Iterator":"struct{func Next() bool, func Value() %s}",
 }
 
 // textual map (conversion done by GoJVM)
-// variadic are arrays like Go so just prefix ... to type
 var typeMap = map[string]string{
 	"void":"",
 	"int":"int",
@@ -41,6 +48,8 @@ var typeMap = map[string]string{
 	"float":"float32",
 	"double":"float64",
 	"boolean":"bool",
+	"long[]":"[]int64",
+	"int[]":"[]int",
 }
 
 type Translator struct {
@@ -85,11 +94,37 @@ func (t *Translator) IsCallableType(s string) bool {
 	return !ok
 }
 
+type CallableList struct {
+	callables []string
+	*Translator
+}
+
+func (c *CallableList) JavaToGoTypeName(s string) (z string) {
+	jc := JavaTypeComponents(s)
+	if !c.IsGoJVMType(jc[0]) && c.IsCallableType(jc[0]) {
+		c.callables = append(c.callables, jc[0])
+	}
+
+	return c.Translator.JavaToGoTypeName(s)
+}
+
+func (c *CallableList) ListCallables() (list []string) {
+	set := make(map[string]byte, len(c.callables))
+	list = make([]string, 0, len(set))
+	for _, name := range c.callables {
+		if _, ok := set[name]; !ok {
+			list = append(list, name)
+		}
+		set[name] = 0
+	}
+	return
+}
+
 // NewGoToJavaList(NewGoToJavaString())
 // NewGoToJavaList(NewGoToJavaList(NewGoToJavaString())
 func (t *Translator) ConverterForType(prefix, s string) (z string) {
 	jc := JavaTypeComponents(s)
-	if jc[0] == "..." {
+	if jc[0] == "..." || jc[0] == "[]"{
 		z += "javabind.NewGoToGoObjectArray("
 	} else {
 		var name string
@@ -156,8 +191,11 @@ func (s *StringGenerator) GenerateCallArgs(p Params) (args []string) {
 			args[i] = param.Name
 		} else if strings.HasSuffix(param.Type, "...") {
 			name := strings.TrimSuffix(param.Type, "...")
+			args[i] = "javabind.ObjectArray(conv_"+param.Name+".Value(), \""+JavaTypeComponents(name)[0]+"\")"
+		} else if strings.HasSuffix(param.Type, "[]") {
+			name := strings.TrimSuffix(param.Type, "[]")
 			args[i] = "javabind.ObjectArray(conv_" + param.Name + ".Value(), \"" + JavaTypeComponents(name)[0] + "\")"
- 		} else {
+		} else {
 			args[i] = "javabind.CastObject(conv_" + param.Name + ".Value(), \"" + JavaTypeComponents(param.Type)[0] + "\")"
 		}
 	}
@@ -247,7 +285,7 @@ func (s *StringGenerator) Generate() {
 		s.out += "err := "
 		s.out += "jbobject.Call"
 		if s.Gen.IsGoJVMType(method.Return) {
-			s.out += capitalize(method.Return)
+			s.out += capitalize(strings.Replace(method.Return, "[]", "Array", -1))
 		} else {
 			s.out += "Obj"
 		}
