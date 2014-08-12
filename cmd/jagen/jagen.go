@@ -118,9 +118,7 @@ func main() {
 	gen.Generate()
 
 	if *outputTypeDependency {
-		for _, line := range list.ListCallables() {
-			fmt.Println(line)
-		}
+		fmt.Println(strings.Join(list.ListCallables(), " "))
 	} else {
 		fmt.Print(gen.Output())
 	}
