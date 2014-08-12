@@ -98,11 +98,12 @@ func main() {
 	var list *jag.CallableList
 
 	if *outputTypeDependency {
-		list = &jag.CallableList{Translator: jag.NewTranslator()}
+		list = &jag.CallableList{Translator: jag.NewTranslator(genHandle)}
 		t = list
 	} else {
-		t = jag.NewTranslator()
+		t = jag.NewTranslator(genHandle)
 	}
+
 	gen := &struct {
 		jag.TranslatorInterface
 		*jag.ClassSig

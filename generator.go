@@ -35,9 +35,10 @@ var objectConversions = map[string]string {
 	"java.util.List":"[]%s",
 	"java.util.Collection":"[]%s",
 	"java.util.Set":"[]%s",
+	"java.util.Iterator":"[]%s",
 	"java.util.Map":"map[%s]%s",
 	"java.util.Map$Entry":"struct{key %s; value %s}",
-	"java.util.Iterator":"struct{func Next() bool, func Value() %s}",
+//	"java.util.Iterator":"struct{func Next() bool, func Value() %s}",
 }
 
 // textual map (conversion done by GoJVM)
@@ -53,12 +54,13 @@ var typeMap = map[string]string{
 }
 
 type Translator struct {
+	Gen Generator
 	TypeMap map[string]string
 	ObjectConversions map[string]string
 }
 
-func NewTranslator() *Translator {
-	return &Translator{typeMap, objectConversions}
+func NewTranslator(g Generator) *Translator {
+	return &Translator{g, typeMap, objectConversions}
 }
 
 func (t *Translator) JavaToGoTypeName(s string) (z string) {
@@ -70,7 +72,7 @@ func (t *Translator) JavaToGoTypeName(s string) (z string) {
 	jc := JavaTypeComponents(s)
 	gc := make([]interface{}, 0)
 	for i := 1; i < len(jc); i++ {
-		gc = append(gc, t.JavaToGoTypeName(jc[i]))
+		gc = append(gc, t.Gen.JavaToGoTypeName(jc[i]))
 	}
 
 	prefix := jc[0]
