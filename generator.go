@@ -29,7 +29,9 @@ type GeneratorHandle struct {
 var objectConversions = map[string]string {
 	"java.lang.Long":"int64",
 	"java.lang.Integer":"int",
+	"java.lang.Float":"float32",
 	"java.lang.String":"string",
+	"java.net.InetAddress":"string",
 	"...":"...%s",
 	"[]":"[]%s",
 	"java.util.List":"[]%s",
