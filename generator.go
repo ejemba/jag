@@ -135,7 +135,7 @@ func (t *Translator) ConverterForType(prefix, s string) (z string) {
 		if t.IsCallableType(jc[0]) {
 			name = "Callable"
 		} else {
-			name = className(jc[0])
+			name = strings.Replace(className(jc[0]), "$", "_", -1)
 		}
 		z += prefix + name + "("
 	}
