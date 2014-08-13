@@ -158,6 +158,13 @@ func javaNameToGoName(s string) (z string) {
 	return
 }
 
+func javaToGoIdentifier(s string) (z string) {
+	if token.Lookup(s).IsKeyword() {
+		return s + "_gen"
+	}
+	return s
+}
+
 type StringGenerator struct {
 	out string
 	Gen Generator
@@ -169,11 +176,7 @@ func (s *StringGenerator) printParams(params Params) {
 		if i != 0 {
 			s.out += ", "
 		}
-		name := p.Name
-		if token.Lookup(name).IsKeyword() {
-			name = name + "_gen"
-		}
-		s.out += name + " " + s.Gen.JavaToGoTypeName(p.Type)
+		s.out += javaToGoIdentifier(p.Name) + " " + s.Gen.JavaToGoTypeName(p.Type)
 	}
 }
 
@@ -188,7 +191,7 @@ func (s *StringGenerator) GenerateParamConversion(p Params) {
 	}
 
 	for _, param := range conversions {
-		s.out += "\tif err := conv_" + param + ".Convert(" + param + "); err != nil {\n\t\tpanic(err)\n\t}\n"
+		s.out += "\tif err := conv_" + param + ".Convert(" + javaToGoIdentifier(param) + "); err != nil {\n\t\tpanic(err)\n\t}\n"
 	}
 	return
 }
@@ -326,11 +329,11 @@ func (s *StringGenerator) Generate() {
 			s.out += "panic(err)\n"
 		}
 		s.out += "\t}\n"
-		var extra string
-		if method.Throws {
-			extra = ", nil"
-		}
 		if ret != "" {
+			var extra string
+			if method.Throws {
+				extra = ", nil"
+			}
 			if s.Gen.IsGoJVMType(method.Return) {
 				s.out += "\treturn jret" +extra+ "\n"
 			} else {
@@ -348,6 +351,8 @@ func (s *StringGenerator) Generate() {
 					s.out += "\treturn *dst"+extra+"\n"
 				}
 			}
+		} else if method.Throws {
+			s.out += "\treturn nil\n"
 		}
 		s.out += "}\n\n"
 	}
