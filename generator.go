@@ -7,7 +7,7 @@ import (
 )
 
 type Generator interface {
-	GetClassSignature() *ClassSig
+	GetClassSignature() ClassSigInterface
 	Generate()
 	TranslatorInterface
 }
@@ -208,7 +208,7 @@ func (s *StringGenerator) GenerateCallArgs(p Params) (args []string) {
 
 func (s *StringGenerator) Generate() {
 	sig := s.Gen.GetClassSignature()
-	if sig.ClassName == "" {
+	if sig.GetClassName() == "" {
 		return
 	}
 
@@ -222,10 +222,10 @@ func (s *StringGenerator) Generate() {
 	}
 	*/
 
-	goClassTypeName := javaNameToGoName(sig.ClassName)
+	goClassTypeName := javaNameToGoName(sig.GetClassName())
 	s.out += fmt.Sprintf("type %s struct {\n\t*javabind.Callable\n}\n\n", goClassTypeName)
 
-	for i, constructor := range sig.Constructors {
+	for i, constructor := range sig.GetConstructors() {
 		s.out += "// "+constructor.Line+"\n"
 		s.out += "func New"+goClassTypeName
 		if i > 0 {
@@ -241,7 +241,7 @@ func (s *StringGenerator) Generate() {
 		s.out += ") {\n"
 		s.GenerateParamConversion(constructor.Params)
 		newInstanceArgs := make([]string, 0)
-		newInstanceArgs = append(newInstanceArgs, `"`+sig.ClassName+`"`)
+		newInstanceArgs = append(newInstanceArgs, `"`+sig.GetClassName()+`"`)
 		newInstanceArgs = append(newInstanceArgs, s.GenerateCallArgs(constructor.Params)...)
 		var onError string
 		if constructor.Throws {
@@ -262,9 +262,17 @@ func (s *StringGenerator) Generate() {
 		s.out += "\n}\n\n"
 	}
 
-	for _, method := range sig.Methods {
+	methodCount := make(map[string]int)
+	for _, method := range sig.GetMethods() {
 		s.out += "// " + method.Line + "\n"
 		s.out += fmt.Sprintf("func (jbobject *%s) %s", goClassTypeName, capitalize(method.Name))
+		if v , ok := methodCount[method.Name]; ok {
+			v++
+			s.out += fmt.Sprintf("%d", v)
+			methodCount[method.Name] = v
+		} else {
+			methodCount[method.Name] = 1
+		}
 		s.out += "("
 		s.printParams(method.Params)
 		s.out += ") "
@@ -277,7 +285,7 @@ func (s *StringGenerator) Generate() {
 			}
 		} else {
 			if method.Throws {
-				s.out += "error"
+				s.out += "(err error)"
 			}
 		}
 		s.out += " {\n"

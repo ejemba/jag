@@ -17,23 +17,31 @@ func capitalize(s string) string {
 	return strings.ToUpper(s[0:1]) + s[1:]
 }
 
-type ParamParser interface {
-	GetParams() Params
-}
-
 type Parser interface {
 	GetStatement() string
 	ParseStatement()
 	GetToken(int) string
 	ScopeDepth() int
 	GetCurrentStatement() string
-	ParamWords() (count int, start int)
 	FindToken(token string) (pos int, found bool)
-	Parse()
 	Scan()
 	io.Reader
 	ParamParser
-	GetClassSignature() *ClassSig
+	ClassSigInterface
+}
+
+type ClassSigInterface interface {
+	ParamWords() (count int, start int)
+	Parse()
+	GetPackageName() string
+	GetClassName() string
+	GetConstructors() []*ClassSigConstructor
+	GetMethods() []*ClassSigMethod
+	GetClassSignature() ClassSigInterface
+}
+
+type ParamParser interface {
+	GetParams() Params
 }
 
 type ParserHandle struct {
@@ -257,30 +265,46 @@ func (t *Tokens) GetCurrentStatement() string {
 	return t.currentStmt
 }
 
+type ClassSigConstructor struct {
+	Params Params
+	Throws bool
+	Line string
+}
+
+type ClassSigMethod struct {
+	Name string
+	Params Params
+	Return string
+	Throws bool
+	Line string
+}
+
 type ClassSig struct {
 	PackageName string
 	ClassName string
-	Constructors []*struct{
-		Params Params
-		Throws bool
-		Line string
-	}
-	Methods []*struct{
-		Name string
-		Params Params
-		Return string
-		Throws bool
-		Line string
-	}
+	Constructors []*ClassSigConstructor
+	Methods []*ClassSigMethod
 	Parser Parser
 }
 
-func (c *ClassSig) Parse() {	
+func (c *ClassSig) GetClassSignature() ClassSigInterface {
+	return c.Parser
+}
+
+func (c *ClassSig) GetPackageName() string {
+	return c.PackageName
+}
+
+func (c *ClassSig) GetClassName() string {
+	return c.ClassName
+}
+
+func (c *ClassSig) Parse() {
 	for {		
 		c.Parser.ParseStatement()
 		
 		if c.Parser.GetToken(0) == "package" {
-			c.PackageName = c.Parser.GetToken(1)		
+			c.PackageName = c.Parser.GetToken(1)
 		}
 		
 		if c.Parser.GetToken(0) != "public" ||
@@ -309,7 +333,7 @@ func (c *ClassSig) Parse() {
 				c.Constructors[i].Line = c.Parser.GetCurrentStatement()
 
 			} else if c.Parser.GetToken(fnk+2) == "(" {
-				i := sliceutil.Append(&c.Methods)
+			i := sliceutil.Append(&c.Methods)
 				c.Methods[i].Name = c.Parser.GetToken(fnk+1)
 				c.Methods[i].Params = c.Parser.GetParams()
 				c.Methods[i].Return = c.Parser.GetToken(fnk)
@@ -359,8 +383,56 @@ func (c *ClassSig) FirstNonKeyWord() int {
 	return -1
 }
 
-func (c *ClassSig) GetClassSignature() *ClassSig {
-	return c
+func (c *ClassSig) GetConstructors() []*ClassSigConstructor {
+	return c.Constructors
+}
+
+func (c *ClassSig) GetMethods() []*ClassSigMethod {
+	return c.Methods
+}
+
+type ClassSigFilter struct {
+	Parser
+	filter map[string]byte
+}
+
+func NewClassSigFilter(p Parser, filterStr string) *ClassSigFilter {
+	filter := make(map[string]byte)
+	for _, name := range strings.Split(filterStr, " ") {
+		filter[name] = 0
+	}
+	return &ClassSigFilter{p, filter}
+}
+
+func (c *ClassSigFilter) GetConstructors() []*ClassSigConstructor {
+	ret := make([]*ClassSigConstructor, 0, len(c.Parser.GetConstructors()))
+A:
+	for _, v := range c.Parser.GetConstructors() {
+		for _, v2 := range v.Params {
+			if _, ok := c.filter[v2.Type]; ok {
+				continue A
+			}
+		}
+		ret = append(ret, v)
+	}
+	return ret
+}
+
+func (c *ClassSigFilter) GetMethods() []*ClassSigMethod {
+	ret := make([]*ClassSigMethod, 0, len(c.Parser.GetMethods()))
+A:
+	for _, v := range c.Parser.GetMethods() {
+		for _, v2 := range v.Params {
+			if _, ok := c.filter[v2.Type]; ok {
+				continue A
+			}
+		}
+		if _, ok := c.filter[v.Return]; ok {
+			continue
+		}
+		ret = append(ret, v)
+	}
+	return ret
 }
 
 type SrcParams struct {

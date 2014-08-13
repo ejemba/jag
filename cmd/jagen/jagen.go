@@ -16,6 +16,7 @@ func main() {
 	srcFilename := flag.String("src", "", "set the source file name")
 	packageName := flag.String("pkg", "gojvm_gen_package", "set the Go package name")
 	outputTypeDependency := flag.Bool("d", false, "display type dependency")
+	typeFilter := flag.String("filter", "", "filter out functions/methods by parameter/return types")
 	flag.Parse()
 
 	var javapReader io.Reader
@@ -41,11 +42,12 @@ func main() {
 	}
 
 	handle := &jag.ParserHandle{}
+	javapSig := &jag.ClassSig{Parser: handle}
 	parser := jag.NewParser(
 		handle,
 		jag.NewStatements(handle),
 		&jag.Tokens{Parser: handle},
-		&jag.ClassSig{Parser: handle},
+		javapSig,
 		&jag.JavapParams{Parser: handle},
 		commentfilter.NewCommentFilter("Signature:", "\n", `"`, `\`, commentfilter.NewCommentFilter("Compiled from", "\n", `"`, `\`, javapReader)),
 	)
@@ -54,40 +56,39 @@ func main() {
 
 	if srcReader != nil {
 		handle := &jag.ParserHandle{}
+		srcSig := &jag.ClassSig{Parser: handle}
 		srcParser := jag.NewParser(
 			handle,
 			jag.NewStatements(handle),
 			&jag.Tokens{Parser: handle},
-			&jag.ClassSig{Parser: handle},
+			srcSig,
 			&jag.SrcParams{Parser: handle},
 			commentfilter.NewCommentFilter("//", "\n", `"`, `\`, commentfilter.NewCommentFilter("/*", "*/", `"`, `\`, srcReader)),
 		)
 		srcParser.Scan()
 
-		sig := srcParser.GetClassSignature()
 		cParamNames := make(map[string]int)
-		for i, c := range sig.Constructors {
+		for i, c := range srcSig.Constructors {
 			cParamNames[strings.Join(c.Params.TypeClassNames(), "-")] = i
 		}
 		mParamNames := make(map[string]int)
-		for i, m := range sig.Methods {
+		for i, m := range srcSig.Methods {
 			mParamNames[m.Name + strings.Join(m.Params.TypeClassNames(), "-")] = i
 		}
-		sig2 := parser.GetClassSignature()
-		for _, c := range sig2.Constructors {
+		for _, c := range javapSig.Constructors {
 			if v, ok := cParamNames[strings.Join(c.Params.TypeClassNames(), "-")]; ok {
 				for i := range c.Params {
-					c.Params[i].Name = sig.Constructors[v].Params[i].Name
+					c.Params[i].Name = srcSig.Constructors[v].Params[i].Name
 				}
-				c.Line = sig.Constructors[v].Line
+				c.Line = srcSig.Constructors[v].Line
 			}
 		}
-		for _, m := range sig2.Methods {
+		for _, m := range javapSig.Methods {
 			if v, ok := mParamNames[m.Name + strings.Join(m.Params.TypeClassNames(), "-")]; ok {
 				for i := range m.Params {
-					m.Params[i].Name = sig.Methods[v].Params[i].Name
+					m.Params[i].Name = srcSig.Methods[v].Params[i].Name
 				}
-				m.Line = sig.Methods[v].Line
+				m.Line = srcSig.Methods[v].Line
 			}
 		}
 	}
@@ -104,13 +105,16 @@ func main() {
 		t = jag.NewTranslator(genHandle)
 	}
 
+	filter := jag.NewClassSigFilter(handle.Parser, *typeFilter)
+	handle.Parser = filter
+
 	gen := &struct {
 		jag.TranslatorInterface
-		*jag.ClassSig
+		*jag.ClassSigFilter
 		*jag.StringGenerator
 		} {
 		t,
-		parser.GetClassSignature(),
+		filter,
 		&jag.StringGenerator{Gen: genHandle, PkgName: *packageName},
 	}
 	genHandle.Generator = gen
