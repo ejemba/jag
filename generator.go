@@ -40,7 +40,7 @@ var objectConversions = map[string]string {
 	"java.util.Set":"[]%s",
 	"java.util.Iterator":"[]%s",
 	"java.util.Map":"map[%s]%s",
-	"java.util.Map$Entry":"struct{key %s; value %s}",
+	"java.util.Map$Entry":"struct{Key %s; Value %s}",
 //	"java.util.Iterator":"struct{func Next() bool, func Value() %s}",
 }
 
