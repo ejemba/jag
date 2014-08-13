@@ -56,6 +56,14 @@ public class Foo {
         }
         return ret;
     }
+
+    public int Method6() {
+        return 42;
+    }
+
+    public int Method7() throws Exception {
+        return 42;
+    }
 }
 
 /*

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"log"
+	"go/token"
 )
 
 type Generator interface {
@@ -168,7 +169,11 @@ func (s *StringGenerator) printParams(params Params) {
 		if i != 0 {
 			s.out += ", "
 		}
-		s.out += p.Name + " " + s.Gen.JavaToGoTypeName(p.Type)
+		name := p.Name
+		if token.Lookup(name).IsKeyword() {
+			name = name + "_gen"
+		}
+		s.out += name + " " + s.Gen.JavaToGoTypeName(p.Type)
 	}
 }
 
@@ -279,13 +284,13 @@ func (s *StringGenerator) Generate() {
 		ret := s.Gen.JavaToGoTypeName(method.Return)
 		if ret != "" {
 			if method.Throws {
-				s.out += "(ret " + ret  + ", err error)"
+				s.out += "(" + ret  + ", error)"
 			} else {
-				s.out += "(ret " + ret + ")"
+				s.out += ret
 			}
 		} else {
 			if method.Throws {
-				s.out += "(err error)"
+				s.out += "error"
 			}
 		}
 		s.out += " {\n"
@@ -310,29 +315,41 @@ func (s *StringGenerator) Generate() {
 		s.out += "(" + strings.Join(callArgs, ", ") + ")\n"
 		s.out += "\tif err != nil {\n\t\t"
 		if method.Throws {
-			s.out += "return\n"
+			if ret != "" {
+				s.out += "var zero "+ret+"\n"
+				s.out += "\t\treturn zero, "
+			} else {
+				s.out += "return "
+			}
+			s.out += "err\n"
 		} else {
 			s.out += "panic(err)\n"
 		}
 		s.out += "\t}\n"
+		var extra string
+		if method.Throws {
+			extra = ", nil"
+		}
 		if ret != "" {
 			if s.Gen.IsGoJVMType(method.Return) {
-				s.out += "\tret = jret\n"
+				s.out += "\treturn jret" +extra+ "\n"
 			} else {
 				s.out += "\tretconv := " + s.Gen.ConverterForType("javabind.NewJavaToGo", method.Return) + "\n"
 				firstRetComponent := JavaTypeComponents(method.Return)[0]
 				if s.Gen.IsCallableType(firstRetComponent) {
 					s.out += "\tdst := &javabind.Callable{}\n"
 				} else {
-					s.out += "\tdst := &ret\n"
+					s.out += "\tdst := new("+ret+")\n"
 				}
 				s.out += "\tretconv.Dest(dst)\n\tif err := retconv.Convert(jret); err != nil {\n\t\tpanic(err)\n\t}\n"
 				if s.Gen.IsCallableType(firstRetComponent) {
-					s.out += "\tret = &" + javaNameToGoName(method.Return) + "{dst}\n"
+					s.out += "\treturn &" + javaNameToGoName(method.Return) + "{dst}"+extra+"\n"
+				} else {
+					s.out += "\treturn *dst"+extra+"\n"
 				}
 			}
 		}
-		s.out += "\treturn\n}\n\n"
+		s.out += "}\n\n"
 	}
 }
 
