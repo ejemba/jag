@@ -283,7 +283,11 @@ func (s *StringGenerator) Generate() {
 	methodCount := make(map[string]int)
 	for _, method := range sig.GetMethods() {
 		s.out += "// " + method.Line + "\n"
-		s.out += fmt.Sprintf("func (jbobject *%s) %s", goClassTypeName, capitalize(method.Name))
+		if method.Static {
+			s.out += fmt.Sprintf("func %s", goClassTypeName + capitalize(method.Name))
+		} else {
+			s.out += fmt.Sprintf("func (jbobject *%s) %s", goClassTypeName, capitalize(method.Name))
+		}
 		if v , ok := methodCount[method.Name]; ok {
 			v++
 			s.out += fmt.Sprintf("%d", v)
@@ -313,13 +317,20 @@ func (s *StringGenerator) Generate() {
 			s.out += "jret, "
 		}
 		s.out += "err := "
-		s.out += "jbobject.Call"
+		if method.Static {
+			s.out += "javabind.CallStatic"
+		} else {
+			s.out += "jbobject.Call"
+		}
 		if s.Gen.IsGoJVMType(method.Return) {
 			s.out += capitalize(strings.Replace(method.Return, "[]", "Array", -1))
 		} else {
 			s.out += "Obj"
 		}
 		callArgs := make([]string, 0)
+		if method.Static {
+			callArgs = append(callArgs, `"` + sig.GetClassName() + `"`)
+		}
 		callArgs = append(callArgs, `"` + method.Name + `"`)
 		if !s.Gen.IsGoJVMType(method.Return) {
 			callArgs = append(callArgs, `"` + JavaTypeComponents(method.Return)[0]  + `"`)

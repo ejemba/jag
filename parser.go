@@ -277,6 +277,7 @@ type ClassSigMethod struct {
 	Return string
 	Throws bool
 	Line string
+	Static bool
 }
 
 type ClassSig struct {
@@ -300,23 +301,31 @@ func (c *ClassSig) GetClassName() string {
 }
 
 func (c *ClassSig) Parse() {
-	for {		
+	for {
 		c.Parser.ParseStatement()
 		
 		if c.Parser.GetToken(0) == "package" {
 			c.PackageName = c.Parser.GetToken(1)
 		}
-		
-		if c.Parser.GetToken(0) != "public" ||
-		   (c.Parser.GetToken(1) != "class" && c.Parser.GetToken(1) != "interface") {
+
+		if c.Parser.GetToken(0) != "public" {
 			continue
 		}
 
-		if strings.Contains(c.Parser.GetToken(2), "<") {
+		declarePos, found := c.Parser.FindToken("class")
+		if !found {
+			declarePos, found = c.Parser.FindToken("interface")
+			if !found {
+				continue
+			}
+		}
+
+		c.ClassName = c.Parser.GetToken(declarePos + 1)
+
+		if strings.Contains(c.ClassName, "<") {
 			continue
 		}
 
-		c.ClassName = c.Parser.GetToken(2)
 		for c.Parser.ScopeDepth() > 0 {
 			c.Parser.ParseStatement()
 			if c.Parser.ScopeDepth() > 2 {
@@ -325,20 +334,24 @@ func (c *ClassSig) Parse() {
 			if c.Parser.GetToken(0) != "public" {
 				continue
 			}
+			if _, found := c.Parser.FindToken("("); !found {
+				continue
+			}
+			_, static := c.Parser.FindToken("static")
 			fnk := c.FirstNonKeyWord()
-			if c.Parser.GetToken(fnk) == c.ClassName {
+			if c.Parser.GetToken(fnk) == c.ClassName && !static {
 				i := sliceutil.Append(&c.Constructors)
 				c.Constructors[i].Params = c.Parser.GetParams()
 				c.Constructors[i].Throws = c.Throws()
 				c.Constructors[i].Line = c.Parser.GetCurrentStatement()
-
 			} else if c.Parser.GetToken(fnk+2) == "(" {
-			i := sliceutil.Append(&c.Methods)
+				i := sliceutil.Append(&c.Methods)
 				c.Methods[i].Name = c.Parser.GetToken(fnk+1)
 				c.Methods[i].Params = c.Parser.GetParams()
 				c.Methods[i].Return = c.Parser.GetToken(fnk)
 				c.Methods[i].Throws = c.Throws()
 				c.Methods[i].Line = c.Parser.GetCurrentStatement()
+				c.Methods[i].Static = static
 			}
 		}
 	}
@@ -358,7 +371,10 @@ func (c *ClassSig) Throws() bool {
 }
 
 func (c *ClassSig) ParamWords() (count int, start int) {
-	start, _ = c.Parser.FindToken("(")
+	start, found := c.Parser.FindToken("(")
+	if !found {
+		panic("ParamWords called while invalid statement")
+	}
 	start++
 	i := start
 	for {
@@ -477,6 +493,7 @@ func (c *JavapParams) GetParams() Params {
 
 var javaKeyWords = map[string]bool {
 	"final":true,
+	"static":true,
 	"abstract":true,
 	"public":true,
 }

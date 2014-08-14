@@ -64,6 +64,10 @@ public class Foo {
     public int Method7() throws Exception {
         return 42;
     }
+
+    public static int Method8() {
+        return 42;
+    }
 }
 
 /*
