@@ -196,6 +196,15 @@ func (s *StringGenerator) GenerateParamConversion(p Params) {
 	return
 }
 
+func (s *StringGenerator) GenerateParamConversionCleanup(p Params) {
+	for _, param := range p {
+		if s.Gen.IsGoJVMType(param.Type) {
+			continue
+		}
+		s.out += "\tconv_" + param.Name + ".CleanUp()\n"
+	}
+}
+
 func (s *StringGenerator) GenerateCallArgs(p Params) (args []string) {
 	args = make([]string, len(p))
 	for i, param := range p {
@@ -261,8 +270,9 @@ func (s *StringGenerator) Generate() {
 	obj, err := javabind.Env.NewInstanceStr(`+strings.Join(newInstanceArgs, ", ")+`)
 	if err != nil {
 		`+onError+`
-	}
-	return &`+goClassTypeName+`{&javabind.Callable{obj, javabind.Env}}`
+	}` + "\n"
+		s.GenerateParamConversionCleanup(constructor.Params)
+		s.out += "\treturn &"+goClassTypeName+"{&javabind.Callable{obj, javabind.Env}}"
 
 		if constructor.Throws {
 			s.out += ", nil"
@@ -329,6 +339,7 @@ func (s *StringGenerator) Generate() {
 			s.out += "panic(err)\n"
 		}
 		s.out += "\t}\n"
+		s.GenerateParamConversionCleanup(method.Params)
 		if ret != "" {
 			var extra string
 			if method.Throws {
@@ -345,6 +356,7 @@ func (s *StringGenerator) Generate() {
 					s.out += "\tdst := new("+ret+")\n"
 				}
 				s.out += "\tretconv.Dest(dst)\n\tif err := retconv.Convert(jret); err != nil {\n\t\tpanic(err)\n\t}\n"
+				s.out += "\tretconv.CleanUp()\n"
 				if s.Gen.IsCallableType(firstRetComponent) {
 					s.out += "\treturn &" + javaNameToGoName(method.Return) + "{dst}"+extra+"\n"
 				} else {
