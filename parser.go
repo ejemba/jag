@@ -323,9 +323,12 @@ func (c *ClassSig) Parse() {
 		declarePos, found := c.Parser.FindToken("class")
 		if !found {
 			declarePos, found = c.Parser.FindToken("interface")
-			if !found {
-				continue
-			}
+		}
+		if !found {
+			declarePos, found = c.Parser.FindToken("enum")
+		}
+		if !found {
+			continue
 		}
 
 		c.ClassName = c.Parser.GetToken(declarePos + 1)
