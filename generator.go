@@ -11,6 +11,11 @@ type Generator interface {
 	GetClassSignature() ClassSigInterface
 	Generate()
 	TranslatorInterface
+	ImportListInterface
+}
+
+type ImportListInterface interface {
+	ListImports() (list []string)
 }
 
 type TranslatorInterface interface {
@@ -18,6 +23,7 @@ type TranslatorInterface interface {
 	ConverterForType(prefix, s string) (z string)
 	IsGoJVMType(s string) bool
 	IsCallableType(s string) bool
+	javaNameToGoName(s string) (z string)
 }
 
 type GeneratorHandle struct {
@@ -28,11 +34,13 @@ type GeneratorHandle struct {
 // JNI pimitive arrays, and object arrays (should be done by GoJVM)
 // variadic are arrays like Go so just prefix ... to type
 var objectConversions = map[string]string {
+	"java.lang.Boolean":"bool",
 	"java.lang.Long":"int64",
 	"java.lang.Integer":"int",
 	"java.lang.Float":"float32",
 	"java.lang.String":"string",
 	"java.net.InetAddress":"string",
+	"java.util.Date":"time.Time",
 	"...":"...%s",
 	"[]":"[]%s",
 	"java.util.List":"[]%s",
@@ -60,10 +68,11 @@ type Translator struct {
 	Gen Generator
 	TypeMap map[string]string
 	ObjectConversions map[string]string
+	trim string
 }
 
-func NewTranslator(g Generator) *Translator {
-	return &Translator{g, typeMap, objectConversions}
+func NewTranslator(g Generator, trim string) *Translator {
+	return &Translator{g, typeMap, objectConversions, trim}
 }
 
 func (t *Translator) JavaToGoTypeName(s string) (z string) {
@@ -84,7 +93,7 @@ func (t *Translator) JavaToGoTypeName(s string) (z string) {
 	} else if v, ok := t.ObjectConversions[prefix]; ok {
 		return fmt.Sprintf(v, gc...)
 	} else {
-		z = "*" + javaNameToGoName(s)
+		z = "*" + t.Gen.javaNameToGoName(s)
 		return
 	}
 }
@@ -100,27 +109,61 @@ func (t *Translator) IsCallableType(s string) bool {
 }
 
 type CallableList struct {
-	callables []string
-	*Translator
+	callables map[string]byte
+	TranslatorInterface
+}
+
+func NewCallableList(t TranslatorInterface) *CallableList {
+	return &CallableList{make(map[string]byte), t}
 }
 
 func (c *CallableList) JavaToGoTypeName(s string) (z string) {
 	jc := JavaTypeComponents(s)
 	if !c.IsGoJVMType(jc[0]) && c.IsCallableType(jc[0]) {
-		c.callables = append(c.callables, jc[0])
+		c.callables[jc[0]] = 1
 	}
 
-	return c.Translator.JavaToGoTypeName(s)
+	return c.TranslatorInterface.JavaToGoTypeName(s)
 }
 
 func (c *CallableList) ListCallables() (list []string) {
-	set := make(map[string]byte, len(c.callables))
-	list = make([]string, 0, len(set))
-	for _, name := range c.callables {
-		if _, ok := set[name]; !ok {
-			list = append(list, name)
+	for k, _ := range c.callables {
+		list = append(list, k)
+	}
+	return
+}
+
+var importMap = map[string]string {
+	"time":"time",
+}
+
+type ImportList struct {
+	importMap map[string]string
+	convertedTypes map[string]byte
+	TranslatorInterface
+}
+
+func NewImportList(t TranslatorInterface) *ImportList {
+	return &ImportList{importMap, make(map[string]byte), t}
+}
+
+func (c *ImportList) JavaToGoTypeName(s string) (z string) {
+	name :=  c.TranslatorInterface.JavaToGoTypeName(s)
+	jc := JavaTypeComponents(s)
+	if !c.IsGoJVMType(jc[0]) && !c.IsCallableType(jc[0]) {
+		c.convertedTypes[name] = 1
+	}
+
+	return name
+}
+
+func (c *ImportList) ListImports() (list []string) {
+	for k, _ := range c.convertedTypes {
+		for name, importedName := range c.importMap {
+			if strings.HasPrefix(k, name + ".") {
+				list = append(list, importedName)
+			}
 		}
-		set[name] = 0
 	}
 	return
 }
@@ -150,7 +193,8 @@ func (t *Translator) ConverterForType(prefix, s string) (z string) {
 	return
 }
 
-func javaNameToGoName(s string) (z string) {
+func (t *Translator) javaNameToGoName(s string) (z string) {
+	s = strings.TrimPrefix(s, t.trim + ".")
 	for _, part := range strings.Split(s, ".") {
 		z += capitalize(part)
 	}
@@ -219,7 +263,7 @@ func (s *StringGenerator) GenerateReturnConversion(jtype string) {
 		s.out += "\tretconv.Dest(dst)\n\tif err := retconv.Convert(jret); err != nil {\n\t\tpanic(err)\n\t}\n"
 		s.out += "\tretconv.CleanUp()\n"
 		if s.Gen.IsCallableType(firstRetComponent) {
-			s.out += "\treturn &" + javaNameToGoName(jtype) + "{dst}"
+			s.out += "\treturn &" + s.Gen.javaNameToGoName(jtype) + "{dst}"
 		} else {
 			s.out += "\treturn *dst"
 		}
@@ -284,9 +328,6 @@ func (s *StringGenerator) Generate() {
 		return
 	}
 
-	s.out += "package " + s.PkgName + "\n\n"
-	s.out += "import \"javabind\"\n\n"
-
 	/*
 	goClassTypeName := ""
 	for _, part := range strings.Split(sig.ClassName, ".") {
@@ -294,7 +335,7 @@ func (s *StringGenerator) Generate() {
 	}
 	*/
 
-	goClassTypeName := javaNameToGoName(sig.GetClassName())
+	goClassTypeName := s.Gen.javaNameToGoName(sig.GetClassName())
 	s.out += fmt.Sprintf("type %s struct {\n\t*javabind.Callable\n}\n\n", goClassTypeName)
 
 	for i, constructor := range sig.GetConstructors() {
@@ -435,6 +476,13 @@ func (s *StringGenerator) Generate() {
 		s.GenerateReturnConversion(field.Type)
 		s.out += "\n}\n\n"
 	}
+
+	prefix := "package " + s.PkgName + "\n\n"
+	prefix += "import \"javabind\"\n"
+	for _, importName := range s.Gen.ListImports() {
+		prefix += "import \"" + importName + "\"\n"
+	}
+	s.out = prefix + "\n" + s.out
 }
 
 func (s *StringGenerator) Output() string {

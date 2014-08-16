@@ -96,6 +96,10 @@ public class Foo {
     public static int answer = 42;
 
     public static Bar mybar = new Bar();
+
+    public Date Method12(Date x) {
+        return x;
+    }
 }
 
 /*

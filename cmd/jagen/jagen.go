@@ -17,6 +17,7 @@ func main() {
 	packageName := flag.String("pkg", "gojvm_gen_package", "set the Go package name")
 	outputTypeDependency := flag.Bool("d", false, "display type dependency")
 	typeFilter := flag.String("filter", "", "filter out functions/methods by parameter/return types")
+	trim := flag.String("trim", "", "prefix to trim from generated type names")
 	flag.Parse()
 
 	var javapReader io.Reader
@@ -99,21 +100,26 @@ func main() {
 	var list *jag.CallableList
 
 	if *outputTypeDependency {
-		list = &jag.CallableList{Translator: jag.NewTranslator(genHandle)}
+		list = jag.NewCallableList(jag.NewTranslator(genHandle, *trim))
 		t = list
 	} else {
-		t = jag.NewTranslator(genHandle)
+		t = jag.NewTranslator(genHandle, *trim)
 	}
 
 	filter := jag.NewClassSigFilter(handle.Parser, *typeFilter)
 	handle.Parser = filter
 
+	importList := jag.NewImportList(t)
+	t = importList
+
 	gen := &struct {
 		jag.TranslatorInterface
+		jag.ImportListInterface
 		*jag.ClassSigFilter
 		*jag.StringGenerator
 		} {
 		t,
+		importList,
 		filter,
 		&jag.StringGenerator{Gen: genHandle, PkgName: *packageName},
 	}
