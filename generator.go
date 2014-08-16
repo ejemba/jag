@@ -129,17 +129,16 @@ func (c *CallableList) ListCallables() (list []string) {
 // NewGoToJavaList(NewGoToJavaList(NewGoToJavaString())
 func (t *Translator) ConverterForType(prefix, s string) (z string) {
 	jc := JavaTypeComponents(s)
-	if jc[0] == "..." || jc[0] == "[]"{
-		z += "javabind.NewGoToGoObjectArray("
+
+	var name string
+	if jc[0] == "..." || jc[0] == "[]" {
+		name = "ObjectArray"
+	} else if t.IsCallableType(jc[0]) {
+		name = "Callable"
 	} else {
-		var name string
-		if t.IsCallableType(jc[0]) {
-			name = "Callable"
-		} else {
-			name = strings.Replace(className(jc[0]), "$", "_", -1)
-		}
-		z += prefix + name + "("
+		name = strings.Replace(className(jc[0]), "$", "_", -1)
 	}
+	z += prefix + name + "("
 
 	for i := 1; i < len(jc); i++ {
 		if i != 1 {
@@ -205,6 +204,28 @@ func (s *StringGenerator) GenerateParamConversionCleanup(p Params) {
 	}
 }
 
+func (s *StringGenerator) GenerateReturnConversion(jtype string) {
+	if s.Gen.IsGoJVMType(jtype) {
+		s.out += "\treturn jret"
+	} else {
+		s.out += "\tretconv := " + s.Gen.ConverterForType("javabind.NewJavaToGo", jtype) + "\n"
+		jretcomp := JavaTypeComponents(jtype)
+		firstRetComponent := jretcomp[0]
+		if s.Gen.IsCallableType(firstRetComponent) {
+			s.out += "\tdst := &javabind.Callable{}\n"
+		} else {
+			s.out += "\tdst := new("+s.Gen.JavaToGoTypeName(jtype)+")\n"
+		}
+		s.out += "\tretconv.Dest(dst)\n\tif err := retconv.Convert(jret); err != nil {\n\t\tpanic(err)\n\t}\n"
+		s.out += "\tretconv.CleanUp()\n"
+		if s.Gen.IsCallableType(firstRetComponent) {
+			s.out += "\treturn &" + javaNameToGoName(jtype) + "{dst}"
+		} else {
+			s.out += "\treturn *dst"
+		}
+	}
+}
+
 func (s *StringGenerator) GenerateCallArgs(p Params) (args []string) {
 	args = make([]string, len(p))
 	for i, param := range p {
@@ -221,6 +242,40 @@ func (s *StringGenerator) GenerateCallArgs(p Params) (args []string) {
 		}
 	}
 	return
+}
+
+func (s *StringGenerator) GenerateFuncName(t interface{}) {
+	var static bool
+	var prefix string
+	var Type string
+	switch v := t.(type) {
+	case *ClassSigMethod:
+		static = v.Static
+		prefix = "Call"
+		Type = v.Return
+	case *ClassSigField:
+		static = v.Static
+		prefix = "GetField"
+		Type = v.Type
+	}
+	if static {
+		s.out += "javabind"
+	} else {
+		s.out += "jbobject"
+	}
+	s.out += "." + prefix
+	if static {
+		s.out += "Static"
+	}
+
+	if s.Gen.IsGoJVMType(Type) {
+		s.out += capitalize(strings.Replace(Type, "[]", "Array", -1))
+	} else {
+		s.out += "Obj"
+		if JavaTypeComponents(Type)[0] == "[]" {
+			s.out += "Array"
+		}
+	}
 }
 
 func (s *StringGenerator) Generate() {
@@ -317,23 +372,19 @@ func (s *StringGenerator) Generate() {
 			s.out += "jret, "
 		}
 		s.out += "err := "
-		if method.Static {
-			s.out += "javabind.CallStatic"
-		} else {
-			s.out += "jbobject.Call"
-		}
-		if s.Gen.IsGoJVMType(method.Return) {
-			s.out += capitalize(strings.Replace(method.Return, "[]", "Array", -1))
-		} else {
-			s.out += "Obj"
-		}
+		s.GenerateFuncName(method)
 		callArgs := make([]string, 0)
 		if method.Static {
 			callArgs = append(callArgs, `"` + sig.GetClassName() + `"`)
 		}
 		callArgs = append(callArgs, `"` + method.Name + `"`)
+		jretcomp := JavaTypeComponents(method.Return)
 		if !s.Gen.IsGoJVMType(method.Return) {
-			callArgs = append(callArgs, `"` + JavaTypeComponents(method.Return)[0]  + `"`)
+			comp := jretcomp[0]
+			if comp == "[]" {
+				comp = jretcomp[1]
+			}
+			callArgs = append(callArgs, `"` + comp  + `"`)
 		}
 		callArgs = append(callArgs, s.GenerateCallArgs(method.Params)...)
 		s.out += "(" + strings.Join(callArgs, ", ") + ")\n"
@@ -352,32 +403,37 @@ func (s *StringGenerator) Generate() {
 		s.out += "\t}\n"
 		s.GenerateParamConversionCleanup(method.Params)
 		if ret != "" {
-			var extra string
+			s.GenerateReturnConversion(method.Return)
 			if method.Throws {
-				extra = ", nil"
-			}
-			if s.Gen.IsGoJVMType(method.Return) {
-				s.out += "\treturn jret" +extra+ "\n"
-			} else {
-				s.out += "\tretconv := " + s.Gen.ConverterForType("javabind.NewJavaToGo", method.Return) + "\n"
-				firstRetComponent := JavaTypeComponents(method.Return)[0]
-				if s.Gen.IsCallableType(firstRetComponent) {
-					s.out += "\tdst := &javabind.Callable{}\n"
-				} else {
-					s.out += "\tdst := new("+ret+")\n"
-				}
-				s.out += "\tretconv.Dest(dst)\n\tif err := retconv.Convert(jret); err != nil {\n\t\tpanic(err)\n\t}\n"
-				s.out += "\tretconv.CleanUp()\n"
-				if s.Gen.IsCallableType(firstRetComponent) {
-					s.out += "\treturn &" + javaNameToGoName(method.Return) + "{dst}"+extra+"\n"
-				} else {
-					s.out += "\treturn *dst"+extra+"\n"
-				}
+				s.out += ", nil"
 			}
 		} else if method.Throws {
-			s.out += "\treturn nil\n"
+			s.out += "\treturn nil"
 		}
-		s.out += "}\n\n"
+		s.out += "\n}\n\n"
+	}
+
+	for _ , field := range sig.GetFields() {
+		if field.Static == false {
+			continue
+		}
+		ret := s.Gen.JavaToGoTypeName(field.Type)
+		s.out += "func " + goClassTypeName + capitalize(field.Name) + "() " +ret+ " {\n"
+		s.out += "\tjret, err := "
+		s.GenerateFuncName(field)
+		s.out += "(\"" + sig.GetClassName() + "\", \"" + field.Name + "\""
+		if !s.Gen.IsGoJVMType(field.Type) {
+			jretcomp := JavaTypeComponents(field.Type)
+			comp := jretcomp[0]
+			if comp == "[]" {
+				comp = jretcomp[1]
+			}
+			s.out += ", \"" + comp + "\""
+		}
+		s.out += ")\n"
+		s.out += "\tif err != nil {\n\t\tpanic(err)\n\t}\n"
+		s.GenerateReturnConversion(field.Type)
+		s.out += "\n}\n\n"
 	}
 }
 

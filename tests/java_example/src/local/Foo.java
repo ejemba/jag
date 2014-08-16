@@ -68,6 +68,34 @@ public class Foo {
     public static int Method8() {
         return 42;
     }
+
+    public int[] Method9() {
+        int[] x = new int[2];
+        x[0] = 1;
+        x[1] = 2;
+
+        return x;
+    }
+
+    public int[][] Method10() {
+        int[][] x = new int[2][2];
+        x[0] = Method9();
+        x[1] = Method9();
+
+        return x;
+    }
+
+    public Bar[] Method11() {
+        Bar[] x = new Bar[2];
+        x[0] = new Bar();
+        x[1] = new Bar();
+
+        return x;
+    }
+
+    public static int answer = 42;
+
+    public static Bar mybar = new Bar();
 }
 
 /*

@@ -35,6 +35,7 @@ type ClassSigInterface interface {
 	Parse()
 	GetPackageName() string
 	GetClassName() string
+	GetFields() []*ClassSigField
 	GetConstructors() []*ClassSigConstructor
 	GetMethods() []*ClassSigMethod
 	GetClassSignature() ClassSigInterface
@@ -280,11 +281,18 @@ type ClassSigMethod struct {
 	Static bool
 }
 
+type ClassSigField struct {
+	Name string
+	Type string
+	Static bool
+}
+
 type ClassSig struct {
 	PackageName string
 	ClassName string
 	Constructors []*ClassSigConstructor
 	Methods []*ClassSigMethod
+	Fields []*ClassSigField
 	Parser Parser
 }
 
@@ -334,25 +342,33 @@ func (c *ClassSig) Parse() {
 			if c.Parser.GetToken(0) != "public" {
 				continue
 			}
-			if _, found := c.Parser.FindToken("("); !found {
-				continue
-			}
+
 			_, static := c.Parser.FindToken("static")
+			_, fun := c.Parser.FindToken("(");
 			fnk := c.FirstNonKeyWord()
-			if c.Parser.GetToken(fnk) == c.ClassName && !static {
-				i := sliceutil.Append(&c.Constructors)
-				c.Constructors[i].Params = c.Parser.GetParams()
-				c.Constructors[i].Throws = c.Throws()
-				c.Constructors[i].Line = c.Parser.GetCurrentStatement()
-			} else if c.Parser.GetToken(fnk+2) == "(" {
-				i := sliceutil.Append(&c.Methods)
-				c.Methods[i].Name = c.Parser.GetToken(fnk+1)
-				c.Methods[i].Params = c.Parser.GetParams()
-				c.Methods[i].Return = c.Parser.GetToken(fnk)
-				c.Methods[i].Throws = c.Throws()
-				c.Methods[i].Line = c.Parser.GetCurrentStatement()
-				c.Methods[i].Static = static
+
+			if fun {
+				if c.Parser.GetToken(fnk) == c.ClassName && !static {
+					i := sliceutil.Append(&c.Constructors)
+					c.Constructors[i].Params = c.Parser.GetParams()
+					c.Constructors[i].Throws = c.Throws()
+					c.Constructors[i].Line = c.Parser.GetCurrentStatement()
+				} else {
+					i := sliceutil.Append(&c.Methods)
+					c.Methods[i].Name = c.Parser.GetToken(fnk+1)
+					c.Methods[i].Params = c.Parser.GetParams()
+					c.Methods[i].Return = c.Parser.GetToken(fnk)
+					c.Methods[i].Throws = c.Throws()
+					c.Methods[i].Line = c.Parser.GetCurrentStatement()
+					c.Methods[i].Static = static
+				}
+			} else if static {
+				i := sliceutil.Append(&c.Fields)
+				c.Fields[i].Name = c.Parser.GetToken(fnk+1)
+				c.Fields[i].Type = c.Parser.GetToken(fnk)
+				c.Fields[i].Static = static
 			}
+
 		}
 	}
 }
@@ -407,6 +423,10 @@ func (c *ClassSig) GetMethods() []*ClassSigMethod {
 	return c.Methods
 }
 
+func (c *ClassSig) GetFields() []*ClassSigField {
+	return c.Fields
+}
+
 type ClassSigFilter struct {
 	Parser
 	filter map[string]byte
@@ -444,6 +464,17 @@ A:
 			}
 		}
 		if _, ok := c.filter[v.Return]; ok {
+			continue
+		}
+		ret = append(ret, v)
+	}
+	return ret
+}
+
+func (c *ClassSigFilter) GetFields() []*ClassSigField {
+	ret := make([]*ClassSigField, 0, len(c.Parser.GetFields()))
+	for _, v := range c.Parser.GetFields() {
+		if _, ok := c.filter[v.Type]; ok {
 			continue
 		}
 		ret = append(ret, v)
