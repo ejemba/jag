@@ -333,9 +333,9 @@ func (c *ClassSig) Parse() {
 
 		c.ClassName = c.Parser.GetToken(declarePos + 1)
 
-//		if strings.Contains(c.ClassName, "<") {
-//			continue
-//		}
+		if strings.Contains(c.ClassName, "<") {
+			continue
+		}
 
 		for c.Parser.ScopeDepth() > 0 {
 			c.Parser.ParseStatement()
@@ -453,8 +453,10 @@ func (c *ClassSigFilter) GetConstructors() []*ClassSigConstructor {
 A:
 	for _, v := range c.Parser.GetConstructors() {
 		for _, v2 := range v.Params {
-			if _, ok := c.filter[v2.Type]; ok {
-				continue A
+			for _, v3 := range JavaTypeComponents(v2.Type) {
+				if _, ok := c.filter[v3]; ok {
+					continue A
+				}
 			}
 		}
 		ret = append(ret, v)
@@ -467,12 +469,16 @@ func (c *ClassSigFilter) GetMethods() []*ClassSigMethod {
 A:
 	for _, v := range c.Parser.GetMethods() {
 		for _, v2 := range v.Params {
-			if _, ok := c.filter[v2.Type]; ok {
-				continue A
+			for _, v3 := range JavaTypeComponents(v2.Type) {
+				if _, ok := c.filter[v3]; ok {
+					continue A
+				}
 			}
 		}
-		if _, ok := c.filter[v.Return]; ok {
-			continue
+		for _, v2 := range JavaTypeComponents(v.Return) {
+			if _, ok := c.filter[v2]; ok {
+				continue A
+			}
 		}
 		ret = append(ret, v)
 	}

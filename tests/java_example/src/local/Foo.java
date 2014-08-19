@@ -100,6 +100,14 @@ public class Foo {
     public Date Method12(Date x) {
         return x;
     }
+
+    public List<Bar> Method13() {
+        List<Bar> x = new ArrayList<Bar>();
+
+        x.add(new Bar());
+        x.add(new Bar());
+        return x;
+    }
 }
 
 /*

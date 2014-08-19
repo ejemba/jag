@@ -41,6 +41,7 @@ var objectConversions = map[string]string {
 	"java.lang.Long":"int64",
 	"java.lang.Integer":"int",
 	"java.lang.Float":"float32",
+	"java.lang.Double":"float64",
 	"java.lang.String":"string",
 	"java.net.InetAddress":"string",
 	"java.util.Date":"time.Time",
@@ -188,11 +189,11 @@ func (t *Translator) ConverterForType(prefix, s string) (z string) {
 	if jc[0] == "..." || jc[0] == "[]" {
 		name = "ObjectArray"
 	} else if t.IsCallableType(jc[0]) {
-		name = "Callable"
+		return prefix + "Callable()"
 	} else {
 		name = strings.Replace(className(jc[0]), "$", "_", -1)
 	}
-	z += prefix + name + "("
+	z = prefix + name + "("
 
 	for i := 1; i < len(jc); i++ {
 		if i != 1 {
