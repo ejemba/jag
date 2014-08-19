@@ -333,9 +333,9 @@ func (c *ClassSig) Parse() {
 
 		c.ClassName = c.Parser.GetToken(declarePos + 1)
 
-		if strings.Contains(c.ClassName, "<") {
-			continue
-		}
+//		if strings.Contains(c.ClassName, "<") {
+//			continue
+//		}
 
 		for c.Parser.ScopeDepth() > 0 {
 			c.Parser.ParseStatement()
@@ -348,27 +348,32 @@ func (c *ClassSig) Parse() {
 
 			_, static := c.Parser.FindToken("static")
 			_, fun := c.Parser.FindToken("(");
-			fnk := c.FirstNonKeyWord()
+			typePos := c.FirstNonKeyWord()
+			t := c.Parser.GetToken(typePos)
+			if t[0] == '<' && t[len(t) - 1] == '>' {
+				continue
+//				typePos++
+			}
 
 			if fun {
-				if c.Parser.GetToken(fnk) == c.ClassName && !static {
+				if c.Parser.GetToken(typePos) == c.ClassName && !static  && c.Parser.GetToken(typePos+1) == "(" {
 					i := sliceutil.Append(&c.Constructors)
 					c.Constructors[i].Params = c.Parser.GetParams()
 					c.Constructors[i].Throws = c.Throws()
 					c.Constructors[i].Line = c.Parser.GetCurrentStatement()
 				} else {
 					i := sliceutil.Append(&c.Methods)
-					c.Methods[i].Name = c.Parser.GetToken(fnk+1)
+					c.Methods[i].Name = c.Parser.GetToken(typePos+1)
 					c.Methods[i].Params = c.Parser.GetParams()
-					c.Methods[i].Return = c.Parser.GetToken(fnk)
+					c.Methods[i].Return = c.Parser.GetToken(typePos)
 					c.Methods[i].Throws = c.Throws()
 					c.Methods[i].Line = c.Parser.GetCurrentStatement()
 					c.Methods[i].Static = static
 				}
 			} else if static {
 				i := sliceutil.Append(&c.Fields)
-				c.Fields[i].Name = c.Parser.GetToken(fnk+1)
-				c.Fields[i].Type = c.Parser.GetToken(fnk)
+				c.Fields[i].Name = c.Parser.GetToken(typePos+1)
+				c.Fields[i].Type = c.Parser.GetToken(typePos)
 				c.Fields[i].Static = static
 			}
 

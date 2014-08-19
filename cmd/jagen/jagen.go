@@ -18,6 +18,7 @@ func main() {
 	outputTypeDependency := flag.Bool("d", false, "display type dependency")
 	typeFilter := flag.String("filter", "", "filter out functions/methods by parameter/return types")
 	trim := flag.String("trim", "", "prefix to trim from generated type names")
+	abstractClassesFileName := flag.String("abstract", "", "file with names of abstract/interface classes")
 	flag.Parse()
 
 	var javapReader io.Reader
@@ -40,6 +41,16 @@ func main() {
 		}
 		defer file.Close()
 		srcReader = file
+	}
+
+	var abstractClassListFile io.Reader
+	if *abstractClassesFileName != "" {
+		file, err := os.Open(*abstractClassesFileName)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer file.Close()
+		abstractClassListFile = file
 	}
 
 	handle := &jag.ParserHandle{}
@@ -106,22 +117,24 @@ func main() {
 		t = jag.NewTranslator(genHandle, *trim)
 	}
 
-	filter := jag.NewClassSigFilter(handle.Parser, *typeFilter)
-	handle.Parser = filter
-
 	importList := jag.NewImportList(t)
 	t = importList
+
+	filter := jag.NewClassSigFilter(handle.Parser, *typeFilter)
+	handle.Parser = filter
 
 	gen := &struct {
 		jag.TranslatorInterface
 		jag.ImportListInterface
 		*jag.ClassSigFilter
 		*jag.StringGenerator
+		*jag.AbstractClassList
 		} {
 		t,
 		importList,
 		filter,
 		&jag.StringGenerator{Gen: genHandle, PkgName: *packageName},
+		jag.NewAbstractClassList(abstractClassListFile),
 	}
 	genHandle.Generator = gen
 

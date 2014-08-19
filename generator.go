@@ -5,6 +5,8 @@ import (
 	"strings"
 	"log"
 	"go/token"
+	"io"
+	"bufio"
 )
 
 type Generator interface {
@@ -12,6 +14,7 @@ type Generator interface {
 	Generate()
 	TranslatorInterface
 	ImportListInterface
+	IsAbstractClass(name string) bool
 }
 
 type ImportListInterface interface {
@@ -81,21 +84,21 @@ func (t *Translator) JavaToGoTypeName(s string) (z string) {
 		defer func() {log.Printf("translated to: " + z) }()
 	}
 
-	jc := JavaTypeComponents(s)
-	gc := make([]interface{}, 0)
-	for i := 1; i < len(jc); i++ {
-		gc = append(gc, t.Gen.JavaToGoTypeName(jc[i]))
+	if v, ok := t.TypeMap[s]; ok {
+		return v
 	}
 
+	jc := JavaTypeComponents(s)
 	prefix := jc[0]
-	if v, ok := t.TypeMap[prefix]; ok {
-		return v
-	} else if v, ok := t.ObjectConversions[prefix]; ok {
+	if v, ok := t.ObjectConversions[prefix]; ok {
+		gc := make([]interface{}, 0)
+		for i := 1; i < len(jc); i++ {
+			gc = append(gc, t.Gen.JavaToGoTypeName(jc[i]))
+		}
 		return fmt.Sprintf(v, gc...)
-	} else {
-		z = "*" + t.Gen.javaNameToGoName(s)
-		return
 	}
+
+	return "*" + t.Gen.javaNameToGoName(prefix)
 }
 
 func (t *Translator) IsGoJVMType(s string) bool {
@@ -106,6 +109,14 @@ func (t *Translator) IsGoJVMType(s string) bool {
 func (t *Translator) IsCallableType(s string) bool {
 	_, ok := t.ObjectConversions[s]
 	return !ok
+}
+
+func (t *Translator) javaNameToGoName(s string) (z string) {
+	s = strings.TrimPrefix(s, t.trim + ".")
+	for _, part := range strings.Split(s, ".") {
+		z += capitalize(part)
+	}
+	return
 }
 
 type CallableList struct {
@@ -193,12 +204,26 @@ func (t *Translator) ConverterForType(prefix, s string) (z string) {
 	return
 }
 
-func (t *Translator) javaNameToGoName(s string) (z string) {
-	s = strings.TrimPrefix(s, t.trim + ".")
-	for _, part := range strings.Split(s, ".") {
-		z += capitalize(part)
+type AbstractClassList struct {
+	list map[string]byte
+}
+
+func NewAbstractClassList(reader io.Reader) (a *AbstractClassList) {
+	a = new(AbstractClassList)
+	a.list = make(map[string]byte)
+	if reader == nil {
+		return
+	}
+	lineScanner := bufio.NewScanner(reader)
+	for lineScanner.Scan() {
+		a.list[lineScanner.Text()] = 1
 	}
 	return
+}
+
+func (a *AbstractClassList) IsAbstractClass(name string) bool {
+	_, ok := a.list[name]
+	return ok
 }
 
 func javaToGoIdentifier(s string) (z string) {
@@ -219,7 +244,14 @@ func (s *StringGenerator) printParams(params Params) {
 		if i != 0 {
 			s.out += ", "
 		}
-		s.out += javaToGoIdentifier(p.Name) + " " + s.Gen.JavaToGoTypeName(p.Type)
+		var typeName string
+		firstComponent := JavaTypeComponents(p.Type)[0]
+		if s.Gen.IsAbstractClass(firstComponent) {
+			typeName = "interface{}"
+		} else {
+			typeName = s.Gen.JavaToGoTypeName(p.Type)
+		}
+		s.out += javaToGoIdentifier(p.Name) + " " + typeName
 	}
 }
 
@@ -263,7 +295,7 @@ func (s *StringGenerator) GenerateReturnConversion(jtype string) {
 		s.out += "\tretconv.Dest(dst)\n\tif err := retconv.Convert(jret); err != nil {\n\t\tpanic(err)\n\t}\n"
 		s.out += "\tretconv.CleanUp()\n"
 		if s.Gen.IsCallableType(firstRetComponent) {
-			s.out += "\treturn &" + s.Gen.javaNameToGoName(jtype) + "{dst}"
+			s.out += "\treturn &" + s.Gen.javaNameToGoName(firstRetComponent) + "{dst}"
 		} else {
 			s.out += "\treturn *dst"
 		}
@@ -335,7 +367,7 @@ func (s *StringGenerator) Generate() {
 	}
 	*/
 
-	goClassTypeName := s.Gen.javaNameToGoName(sig.GetClassName())
+	goClassTypeName := s.Gen.javaNameToGoName(JavaTypeComponents(sig.GetClassName())[0])
 	s.out += fmt.Sprintf("type %s struct {\n\t*javabind.Callable\n}\n\n", goClassTypeName)
 
 	for i, constructor := range sig.GetConstructors() {
