@@ -117,7 +117,7 @@ func (params Params) Types() (types []string) {
 	return
 }
 
-var classNameRe = regexp.MustCompile(`[A-z,a-z]+\.`)
+var classNameRe = regexp.MustCompile(`[A-z,a-z,0-9]+\.`)
 
 func className(name string) string {
 	return classNameRe.ReplaceAllString(name, "")
@@ -316,7 +316,8 @@ func (c *ClassSig) Parse() {
 			c.PackageName = c.Parser.GetToken(1)
 		}
 
-		if c.Parser.GetToken(0) != "public" {
+		_, found := c.Parser.FindToken("public")
+		if !found {
 			continue
 		}
 
