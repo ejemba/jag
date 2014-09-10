@@ -1,7 +1,7 @@
 package main
 
 import (
-	"jag"
+	"github.com/timob/jag"
 	"flag"
 	"os"
 	"log"

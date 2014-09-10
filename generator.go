@@ -511,7 +511,7 @@ func (s *StringGenerator) Generate() {
 	}
 
 	prefix := "package " + s.PkgName + "\n\n"
-	prefix += "import \"javabind\"\n"
+	prefix += "import \"github.com/timob/javabind\"\n"
 	for _, importName := range s.Gen.ListImports() {
 		prefix += "import \"" + importName + "\"\n"
 	}

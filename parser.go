@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"bytes"
 	"log"
-	"sliceutil"
+	"github.com/timob/sliceutil"
 	"regexp"
 )
 
