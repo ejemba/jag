@@ -7,7 +7,7 @@ Generate Go bindings for a Java API.
 
 ####Examples
 * Amazon EC2 SDK for Go http://github.com/timob/ec2
-* Cassandra DB monitoring API for Go http://github.com/timob/node_probe
+* Cassandra DB monitoring API for Go http://github.com/timob/nodeprobe
 
 ####Using
 Installing the packge creates the jagen command. This command will generate a Go file on standard output. It takes as input the output of the javap command (part of the JDK) for a given class file. The generated file will use the http://github.com/timob/javabind package to call the Java API through JNI.
