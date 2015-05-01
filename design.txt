@@ -1,0 +1,81 @@
+TODO
+* add objectarrays to GoJVM
+
+---
+conversion stuff
+* generate parameter type A (generate time)
+* do conversion from A to Java type (run time, generate time)
+* generate return type B (generate time)
+* do converstion from Java type to B (run time,  generate time))
+
+
+generate time, run time
+
+Runtime:
+* runtime package imported by generated package files
+* runtime has setup, global env variable
+* gojvmcallable type that is embedded in generated types, implements convert interface?
+
+type Converter interface  {
+	Convert(value interfaface{}) error
+	Value() interface{}
+	CleanUp() error
+}
+
+NewGoToJavaListConverter(Convertor)
+NewJavaListToGoConverter(Convertor)
+
+NewGoToJavaMapConvertor(Convetor, Convetor)
+NewJavaToGoMapConvertor(Convetor, Convetor)
+
+
+public String greet(String x) {
+	return "hello" + x
+}
+
+
+func Greet(x string) string {
+	xconverter := NewGoToJavaStringConverter()
+	
+	xconvertor.Convert(x)
+	
+	r := callString("greet", xconvertor.Value())
+	
+	rconverter := NewJavaToGoStringConverter(r)
+	rconverter.Convert()
+	retval := rconverter.Value()
+	xconvertor.CleanUp()
+	rconvertor.CleanUp()
+	return retval
+}
+
+public List<String> greets(List<String> x) {
+	// loop over  x creating return List with hello + ""
+	return retval
+}
+
+
+func Greets(x []string) []string {
+	var c Conveter
+	c = NewGoToJavaListConverter(NewGoToJavaStringConvertor(nil))
+	c.Convert(x)
+			
+	r := callString("greet", c.Value())
+	
+	var rc Converter
+	rc = NewJavaToGoListConvertor(NewJavaToGoStringConvetor(nil))
+	rc.Convert(r)
+	
+	retval := rc.Value()
+
+	rc.CleanUp()
+	c.CleanUp()
+	return retval
+}
+
+
+
+func GoToJava(value interface{}, func(v interface{}) interface{}) {
+	
+
+}
