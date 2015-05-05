@@ -53,8 +53,10 @@ func main() {
 //	fmt.Printf("%v\n", &x)
 	bars := foo.Method13()
 	fmt.Printf("%s - %s\n", bars[0].Hello(), bars[1].Hello())
-	
-	_, err = foo.Method1(true, []string{"alpha"})
+
+    fmt.Printf("%s\n", foo.SaySuper())
+
+    _, err = foo.Method1(true, []string{"alpha"})
 	if err != nil {
 		log.Fatal(err)
 	}	

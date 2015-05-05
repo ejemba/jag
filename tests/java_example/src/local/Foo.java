@@ -3,7 +3,7 @@ package local;
 import java.net.InetAddress;
 import java.util.*;
 
-public class Foo {
+public class Foo extends SuperFoo {
     public Foo(boolean bad) throws Exception {
         if (bad == true) {
             throw new Exception();

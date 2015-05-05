@@ -296,7 +296,7 @@ func (s *StringGenerator) GenerateReturnConversion(jtype string) {
 		s.out += "\tretconv.Dest(dst)\n\tif err := retconv.Convert(jret); err != nil {\n\t\tpanic(err)\n\t}\n"
 		s.out += "\tretconv.CleanUp()\n"
 		if s.Gen.IsCallableType(firstRetComponent) {
-			s.out += "\treturn &" + s.Gen.javaNameToGoName(firstRetComponent) + "{dst}"
+            s.out += "\tx := &" +  s.Gen.javaNameToGoName(firstRetComponent) + "{}\n\tx.Callable = dst\n\treturn x"
 		} else {
 			s.out += "\treturn *dst"
 		}
@@ -369,7 +369,17 @@ func (s *StringGenerator) Generate() {
 	*/
 
 	goClassTypeName := s.Gen.javaNameToGoName(JavaTypeComponents(sig.GetClassName())[0])
-	s.out += fmt.Sprintf("type %s struct {\n\t*javabind.Callable\n}\n\n", goClassTypeName)
+
+    field := ""
+    if sig.GetExtends() != "" {
+        field = s.Gen.JavaToGoTypeName(sig.GetExtends())
+        //hack to get rid of *
+        field  = field[1:]
+    } else {
+        field = "*javabind.Callable"
+    }
+
+    s.out += fmt.Sprintf("type %s struct {\n\t%s\n}\n\n", goClassTypeName, field)
 
 	for i, constructor := range sig.GetConstructors() {
 		s.out += "// "+constructor.Line+"\n"
@@ -401,8 +411,7 @@ func (s *StringGenerator) Generate() {
 		`+onError+`
 	}` + "\n"
 		s.GenerateParamConversionCleanup(constructor.Params)
-		s.out += "\treturn &"+goClassTypeName+"{&javabind.Callable{obj, javabind.Env}}"
-
+        s.out += "\tx := &"+goClassTypeName+"{}\n\tx.Callable = &javabind.Callable{obj, javabind.Env}\n\treturn x"
 		if constructor.Throws {
 			s.out += ", nil"
 		}
@@ -511,7 +520,9 @@ func (s *StringGenerator) Generate() {
 	}
 
 	prefix := "package " + s.PkgName + "\n\n"
-	prefix += "import \"github.com/timob/javabind\"\n"
+    if sig.GetExtends() == "" || len(sig.GetConstructors()) != 0 {
+        prefix += "import \"github.com/timob/javabind\"\n"
+    }
 	for _, importName := range s.Gen.ListImports() {
 		prefix += "import \"" + importName + "\"\n"
 	}

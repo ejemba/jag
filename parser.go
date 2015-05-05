@@ -35,6 +35,7 @@ type ClassSigInterface interface {
 	Parse()
 	GetPackageName() string
 	GetClassName() string
+    GetExtends() string
 	GetFields() []*ClassSigField
 	GetConstructors() []*ClassSigConstructor
 	GetMethods() []*ClassSigMethod
@@ -60,7 +61,11 @@ func JavaTypeComponents(j string) (p []string) {
 	s := bufio.NewScanner(bytes.NewBufferString(strings.Replace(j, " ", "", -1)))
 	var scopeDepth int
 	s.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
-		if i := bytes.IndexAny(data, "<>,"); i >= 0 {
+		if atEOF && len(data) == 0 {
+            return 0, nil, nil
+        }
+
+        if i := bytes.IndexAny(data, "<>,"); i >= 0 {
 			if string(data[i]) == "<" {
 				scopeDepth++
 			}
@@ -274,7 +279,7 @@ type ClassSigConstructor struct {
 
 type ClassSigMethod struct {
 	Name string
-	Params Params
+    Params Params
 	Return string
 	Throws bool
 	Line string
@@ -290,6 +295,7 @@ type ClassSigField struct {
 type ClassSig struct {
 	PackageName string
 	ClassName string
+    Extends string
 	Constructors []*ClassSigConstructor
 	Methods []*ClassSigMethod
 	Fields []*ClassSigField
@@ -306,6 +312,10 @@ func (c *ClassSig) GetPackageName() string {
 
 func (c *ClassSig) GetClassName() string {
 	return c.ClassName
+}
+
+func (c *ClassSig) GetExtends() string {
+    return c.Extends
 }
 
 func (c *ClassSig) Parse() {
@@ -337,6 +347,10 @@ func (c *ClassSig) Parse() {
 		if strings.Contains(c.ClassName, "<") {
 			continue
 		}
+
+        if pos, found := c.Parser.FindToken("extends"); found  {
+            c.Extends = c.Parser.GetToken(pos +1 )
+        }
 
 		for c.Parser.ScopeDepth() > 0 {
 			c.Parser.ParseStatement()
@@ -495,6 +509,16 @@ func (c *ClassSigFilter) GetFields() []*ClassSigField {
 		ret = append(ret, v)
 	}
 	return ret
+}
+
+func (c *ClassSigFilter) GetExtends() string {
+    for _, v := range JavaTypeComponents(c.Parser.GetExtends()) {
+        if _, ok := c.filter[v]; ok {
+            return ""
+        }
+    }
+
+    return c.Parser.GetExtends()
 }
 
 type SrcParams struct {
